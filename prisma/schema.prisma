@@ -1,0 +1,30 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STUDENT
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String?  // Null para usuarios de Google OAuth
+  firstName   String
+  lastName    String
+  role        UserRole @default(STUDENT)
+  isActive    Boolean  @default(true)
+  googleId    String?  @unique // Para OAuth con Google
+  avatar      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("users")
+}
