@@ -28,3 +28,66 @@ model User {
 
   @@map("users")
 }
+
+model PlaceType {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  descripcion String?
+  icono       String?  // Para mostrar iconos diferentes en el mapa
+  color       String?  // Color hex para el marcador
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relación con lugares
+  places      Place[]
+
+  @@map("place_types")
+}
+
+model Place {
+  id          String    @id @default(cuid())
+  nombre      String
+  latitud     Float
+  longitud    Float
+  descripcion String?
+  imagen      String?   // URL o path de la imagen
+  isActive    Boolean   @default(true)
+  piso        Int?      // Número de piso (opcional)
+  edificio    String?   // Nombre del edificio
+  codigoQR    String?   // Código QR único para el lugar
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relación con tipo de lugar
+  tipoId      String
+  tipo        PlaceType @relation(fields: [tipoId], references: [id], onDelete: Cascade)
+  
+  // Relaciones con rutas personalizadas
+  rutasOrigen   CustomRoute[] @relation("OrigenPlace")
+  rutasDestino  CustomRoute[] @relation("DestinoPlace")
+
+  @@map("places")
+}
+
+model CustomRoute {
+  id              String   @id @default(cuid())
+  nombre          String?  // Nombre opcional para la ruta
+  puntos          Json     // Array JSON con coordenadas [{lat, lng}, ...]
+  tiempoEstimado  Int?     // Tiempo estimado en minutos
+  distancia       Float?   // Distancia en metros
+  dificultad      String?  // facil, medio, dificil
+  accesible       Boolean  @default(true) // Si es accesible para personas con discapacidad
+  notas           String?  // Notas adicionales sobre la ruta
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relaciones con lugares
+  origenId        String
+  destinoId       String
+  origen          Place    @relation("OrigenPlace", fields: [origenId], references: [id], onDelete: Cascade)
+  destino         Place    @relation("DestinoPlace", fields: [destinoId], references: [id], onDelete: Cascade)
+  
+  // Índice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}
