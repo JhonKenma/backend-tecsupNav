@@ -4,8 +4,12 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { GoogleMapsModule } from './google-maps/google-maps.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { PlaceTypesModule } from './place-types/place-types.module';
+import { PlacesModule } from './places/places.module';
+import { CustomRoutesModule } from './custom-routes/custom-routes.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -13,33 +17,42 @@ import { AppService } from './app.service';
   imports: [
     // Configuración global
     ConfigModule,
-    
-    // Rate limiting (nueva sintaxis)
-    ThrottlerModule.forRoot([{
-      name: 'short',
-      ttl: 1000, // 1 segundo
-      limit: 3, // 3 requests por segundo
-    }, {
-      name: 'medium',
-      ttl: 10000, // 10 segundos
-      limit: 20, // 20 requests por 10 segundos
-    }, {
-      name: 'long',
-      ttl: 60000, // 1 minuto
-      limit: 100, // 100 requests por minuto
-    }]),
-    
-    // Base de datos
+
+    // Rate limiting (usa múltiples estrategias como tenías)
+    ThrottlerModule.forRoot([
+      {
+        name: 'short',
+        ttl: 1000, // 1 segundo
+        limit: 3,
+      },
+      {
+        name: 'medium',
+        ttl: 10000, // 10 segundos
+        limit: 20,
+      },
+      {
+        name: 'long',
+        ttl: 60000, // 1 minuto
+        limit: 100,
+      },
+    ]),
+
+    // Módulos base
     PrismaModule,
-    
-    // Módulos de la aplicación
+    GoogleMapsModule,
+
+    // Módulos de autenticación y usuarios
     AuthModule,
     UsersModule,
+
+    // Módulos de mapas y navegación
+    PlaceTypesModule,
+    PlacesModule,
+    CustomRoutesModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    // Rate limiting global
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
