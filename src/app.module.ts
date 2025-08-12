@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { PlaceTypesModule } from './place-types/place-types.module';
 import { PlacesModule } from './places/places.module';
 import { CustomRoutesModule } from './custom-routes/custom-routes.module';
+import { NavigationModule } from './navigation/navigation.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -18,7 +19,7 @@ import { AppService } from './app.service';
     // Configuración global
     ConfigModule,
 
-    // Rate limiting (usa múltiples estrategias como tenías)
+    // Rate limiting (múltiples estrategias)
     ThrottlerModule.forRoot([
       {
         name: 'short',
@@ -37,7 +38,7 @@ import { AppService } from './app.service';
       },
     ]),
 
-    // Módulos base
+    // Base de datos y servicios globales
     PrismaModule,
     GoogleMapsModule,
 
@@ -49,6 +50,7 @@ import { AppService } from './app.service';
     PlaceTypesModule,
     PlacesModule,
     CustomRoutesModule,
+    NavigationModule,
   ],
   controllers: [AppController],
   providers: [
