@@ -107,10 +107,10 @@ export class GoogleMapsService {
     // Coordenadas aproximadas del campus Tecsup Lima
     // Estos valores deberían ser ajustados según las coordenadas reales
     const campusBounds = {
-      north: -12.042855,
-      south: -12.045853,
-      east: -76.952170,
-      west: -76.953273,
+      north: -12.042855,// Coordenada real del límite norte
+      south: -12.045853,// Coordenada real del límite sur  
+      east: -76.952170,// Coordenada real del límite este
+      west: -76.953273,// Coordenada real del límite oeste
     };
 
 
