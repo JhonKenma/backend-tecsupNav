@@ -45,13 +45,15 @@ export class GoogleMapsService {
     const { origen, destino, modo = 'walking', optimizar = true } = params;
 
     try {
+      // Falta modificar esto para que funcione con paradas intermedias🎆🎆
+      const waypoints = optimizar ? ["optimize:true"] : [];
       const request: DirectionsRequest = {
         params: {
           origin: `${origen.lat},${origen.lng}`,
           destination: `${destino.lat},${destino.lng}`,
           mode: modo === 'walking' ? TravelMode.walking : TravelMode.driving,
           units: UnitSystem.metric,
-          optimize: optimizar,
+          ...(waypoints.length > 0 ? { waypoints } : {}),
           key: this.apiKey,
         },
       };
