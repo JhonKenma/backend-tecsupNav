@@ -24,7 +24,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller('navigation')
-@UseGuards(JwtAuthGuard, MobileOnlyGuard) // Solo estudiantes desde móvil
+//@UseGuards(JwtAuthGuard, MobileOnlyGuard) // Solo estudiantes desde móvil
 export class NavigationController {
   constructor(private readonly navigationService: NavigationService) {}
 
@@ -86,8 +86,8 @@ export class NavigationController {
     }
   }
 
-  // 3. CREAR NAVEGACIÓN DESDE UBICACIÓN ACTUAL
-  @Post('create-route')
+  // 3. CREAR NAVEGACIÓN DESDE UBICACIÓN ACTUAL 
+  @Post('create-route') 
   async createNavigation(
     @Body(ValidationPipe) createNavigationDto: CreateNavigationDto,
     @CurrentUser() user,
@@ -111,7 +111,7 @@ export class NavigationController {
         success: true,
         message: `Ruta creada hacia ${navigation.destination.nombre}`,
         data: navigation,
-        userId: user.id,
+        userId: user.id, //quitar esto si solo quieres probar ya que tienes que estar logueado para que funcione
       };
     } catch (error) {
       return {
