@@ -107,11 +107,29 @@ export class NavigationController {
           },
         });
 
+      // ✅ Redondear la distancia (está dentro de route.distancia)
+      const distancia = parseFloat(navigation.route.distancia.toFixed(2));
+
+      // ✅ Obtener dirección cardinal de la primera instrucción
+      const primeraInstruccion = navigation.instructions?.[0] || '';
+      let direccion = '';
+      if (primeraInstruccion.toLowerCase().includes('norte')) direccion = 'Norte';
+      else if (primeraInstruccion.toLowerCase().includes('sur')) direccion = 'Sur';
+      else if (primeraInstruccion.toLowerCase().includes('este')) direccion = 'Este';
+      else if (primeraInstruccion.toLowerCase().includes('oeste')) direccion = 'Oeste';
+
       return {
         success: true,
         message: `Ruta creada hacia ${navigation.destination.nombre}`,
-        data: navigation,
-        userId: user.id, //quitar esto si solo quieres probar ya que tienes que estar logueado para que funcione
+        direccion, // 👈 nuevo campo agregado
+        data: {
+          ...navigation,
+          route: {
+            ...navigation.route,
+            distancia, // 👈 distancia redondeada
+          },
+        },
+        userId: user.id, //quitar esto si solo quieres probar
       };
     } catch (error) {
       return {
