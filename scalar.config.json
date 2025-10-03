@@ -1,0 +1,13 @@
+{
+  "$schema": "https://cdn.scalar.com/schema/scalar-config.json",
+  "subdomain": "mi-api-documentada",
+  "guides": [
+    {
+      "name": "Documentación de mi API",
+      "sidebar": [
+        { "path": "docs/introduction.md", "type": "page" }
+      ]
+    }
+  ],
+  "references": []
+}
