@@ -29,7 +29,7 @@ export class AppController {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
     };
-  }
+  } 
 
   @Get('network-info')
   getNetworkInfo(@Req() req: Request): object {
