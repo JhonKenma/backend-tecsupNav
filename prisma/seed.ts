@@ -142,84 +142,87 @@ async function seedPlaceTypes() {
 async function seedPlaces() {
   console.log('🏢 Creando lugares de ejemplo...');
 
-  // Obtener tipos de lugar para las relaciones
   const aula = await prisma.placeType.findFirst({ where: { nombre: 'Aula' } });
   const laboratorio = await prisma.placeType.findFirst({ where: { nombre: 'Laboratorio' } });
-  //const oficina = await prisma.placeType.findFirst({ where: { nombre: 'Oficina' } });
   const biblioteca = await prisma.placeType.findFirst({ where: { nombre: 'Biblioteca' } });
   const cafeteria = await prisma.placeType.findFirst({ where: { nombre: 'Cafetería' } });
   const entrada = await prisma.placeType.findFirst({ where: { nombre: 'Entrada' } });
 
-  // Lugares de ejemplo (coordenadas ficticias para Lima, Perú)
-  // Estas coordenadas deberían ser reemplazadas por las coordenadas reales del campus
   const places = [
     // Entradas
     {
       nombre: 'Entrada Principal',
-      latitud: -12.045352,//-12.045352, -76.952343
+      latitud: -12.045352,
       longitud: -76.952343,
       tipoId: entrada?.id || '',
       descripcion: 'Acceso principal al campus',
       edificio: 'Entrada',
       piso: 0,
     },
-    
-    // Pabellón A - Aulas
-    {
-      nombre: 'Aula A101',
-      latitud: -12.0455,
-      longitud: -77.0355,
-      tipoId: aula?.id || '',
-      descripcion: 'Aula de clases teóricas con capacidad para 40 estudiantes',
-      edificio: 'Pabellón A',
-      piso: 1,
-    },
-    {
-      nombre: 'Aula A201',
-      latitud: -12.0456,
-      longitud: -77.0356,
-      tipoId: aula?.id || '',
-      descripcion: 'Aula con proyector y sistema de audio',
-      edificio: 'Pabellón A',
-      piso: 2,
-    },
 
-    // Pabellón B - Laboratorios
+    // Aulas
     {
-      nombre: 'Laboratorio de Electrónica',
-      latitud: -12.0460,
-      longitud: -77.0360,
-      tipoId: laboratorio?.id || '',
-      descripcion: 'Laboratorio equipado con componentes electrónicos',
-      edificio: 'Pabellón B',
-      piso: 1,
+      nombre: 'Aula 400',
+      latitud: -12.04464,
+      longitud: -76.95292,
+      tipoId: aula?.id || '',
+      descripcion: 'Aula de clases teóricas',
+      edificio: 'Pabellón 4',
+      piso: 4,
     },
     {
-      nombre: 'Laboratorio de Redes',
-      latitud: -12.0461,
-      longitud: -77.0361,
-      tipoId: laboratorio?.id || '',
-      descripcion: 'Laboratorio con equipos de networking Cisco',
-      edificio: 'Pabellón B',
+      nombre: 'Aula 1102',
+      latitud: -12.04389,
+      longitud: -76.95236,
+      tipoId: aula?.id || '',
+      descripcion: 'Aula en el primer piso',
+      edificio: 'Pabellón 11',
       piso: 1,
     },
 
-    // Biblioteca
+    // Laboratorios
+    {
+      nombre: 'Laboratorio 802',
+      latitud: -12.04464,
+      longitud: -76.95256,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Laboratorio del pabellón 8',
+      edificio: 'Pabellón 8',
+      piso: 8,
+    },
+    {
+      nombre: 'Laboratorio 1007',
+      latitud: -12.04381,
+      longitud: -76.95264,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Laboratorio de tecnología',
+      edificio: 'Pabellón 10',
+      piso: 10,
+    },
+    {
+      nombre: 'Laboratorio 812',
+      latitud: -12.04414,
+      longitud: -76.95256,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Laboratorio especializado',
+      edificio: 'Pabellón 8',
+      piso: 8,
+    },
+
+    // Biblioteca y cafetería (si las necesitas con coordenadas reales)
     {
       nombre: 'Biblioteca Central',
-      latitud: -12.0470,
-      longitud: -77.0370,
+      latitud: -12.04395,
+      longitud: -76.95280,
       tipoId: biblioteca?.id || '',
       descripcion: 'Biblioteca principal con sala de estudio',
       edificio: 'Biblioteca',
       piso: 1,
     },
-
-    // Cafetería
     {
       nombre: 'Cafetería Principal',
-      latitud: -12.0475,
-      longitud: -77.0375,
+      latitud: -12.04430,
+      longitud: -76.95270,
       tipoId: cafeteria?.id || '',
       descripcion: 'Zona de alimentación con mesas y sillas',
       edificio: 'Cafetería',
@@ -228,7 +231,6 @@ async function seedPlaces() {
   ];
 
   for (const placeData of places) {
-    // Validar que tipoId no esté vacío antes de crear
     if (!placeData.tipoId) {
       console.log(`   ⚠️  Saltando ${placeData.nombre}: tipo no encontrado`);
       continue;
