@@ -11,15 +11,16 @@ import { PlaceTypesModule } from './place-types/place-types.module';
 import { PlacesModule } from './places/places.module';
 import { CustomRoutesModule } from './custom-routes/custom-routes.module';
 import { NavigationModule } from './navigation/navigation.module';
+import { AIAssistantModule } from './ai-assistant/ai-assistant.module'; // ✅ Nuevo módulo
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 @Module({
   imports: [
-    // Configuración global
+    // ✅ Configuración global
     ConfigModule,
 
-    // Rate limiting (múltiples estrategias)
+    // ✅ Rate limiting (con estrategias múltiples)
     ThrottlerModule.forRoot([
       {
         name: 'short',
@@ -38,23 +39,27 @@ import { AppService } from './app.service';
       },
     ]),
 
-    // Base de datos y servicios globales
+    // ✅ Base de datos y servicios globales
     PrismaModule,
     GoogleMapsModule,
 
-    // Módulos de autenticación y usuarios
+    // ✅ Módulos de autenticación y usuarios
     AuthModule,
     UsersModule,
 
-    // Módulos de mapas y navegación
+    // ✅ Módulos de mapas y navegación
     PlaceTypesModule,
     PlacesModule,
     CustomRoutesModule,
     NavigationModule,
+
+    // ✅ Módulo del Asistente de IA
+    AIAssistantModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
+    // ✅ Aplicación global del guard de rate limiting
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
