@@ -123,6 +123,31 @@ async function seedPlaceTypes() {
       icono: 'door',
       color: '#1F2937', // Gris oscuro
     },
+    // 👉 Nuevos tipos agregados
+    {
+      nombre: 'Pabellón',
+      descripcion: 'Estructuras principales que agrupan aulas y oficinas',
+      icono: 'apartment', // o 'building' si usas Material Icons
+      color: '#0EA5E9', // Celeste
+    },
+    {
+      nombre: 'Módulo',
+      descripcion: 'Bloques o secciones del campus con aulas o talleres',
+      icono: 'domain', // o 'view_module'
+      color: '#9333EA', // Violeta
+    },
+    {
+      nombre: 'Fab Lab',
+      descripcion: 'Laboratorio de fabricación digital y prototipado',
+      icono: 'precision_manufacturing', // Ícono de herramientas
+      color: '#22C55E', // Verde brillante
+    },
+    {
+      nombre: 'Polideportivo',
+      descripcion: 'Instalaciones para actividades deportivas y recreativas',
+      icono: 'sports_soccer', // Ícono deportivo
+      color: '#F59E0B', // Amarillo dorado
+    },
   ];
 
   for (const typeData of placeTypes) {
@@ -139,97 +164,175 @@ async function seedPlaceTypes() {
   }
 }
 
-async function seedPlaces() {
-  console.log('🏢 Creando lugares de ejemplo...');
 
+async function seedPlaces() {
+  console.log('🏢 Creando lugares reales...');
+
+  // Buscar tipos existentes en la base de datos
   const aula = await prisma.placeType.findFirst({ where: { nombre: 'Aula' } });
   const laboratorio = await prisma.placeType.findFirst({ where: { nombre: 'Laboratorio' } });
-  const biblioteca = await prisma.placeType.findFirst({ where: { nombre: 'Biblioteca' } });
-  const cafeteria = await prisma.placeType.findFirst({ where: { nombre: 'Cafetería' } });
-  const entrada = await prisma.placeType.findFirst({ where: { nombre: 'Entrada' } });
+  const oficina = await prisma.placeType.findFirst({ where: { nombre: 'Oficina' } });
+  const bano = await prisma.placeType.findFirst({ where: { nombre: 'Baño' } });
+  const polideportivo = await prisma.placeType.findFirst({ where: { nombre: 'Polideportivo' } });
 
+  // Solo los lugares reales registrados
   const places = [
-    // Entradas
-    {
-      nombre: 'Entrada Principal',
-      latitud: -12.045352,
-      longitud: -76.952343,
-      tipoId: entrada?.id || '',
-      descripcion: 'Acceso principal al campus',
-      edificio: 'Entrada',
-      piso: 0,
-    },
-
-    // Aulas
+    // 🏫 Aulas
     {
       nombre: 'Aula 400',
       latitud: -12.04464,
       longitud: -76.95292,
       tipoId: aula?.id || '',
-      descripcion: 'Aula de clases teóricas',
+      descripcion: 'Aula de clases teóricas en el Pabellón 4',
       edificio: 'Pabellón 4',
-      piso: 4,
+      piso: 1,
     },
     {
       nombre: 'Aula 1102',
       latitud: -12.04389,
       longitud: -76.95236,
       tipoId: aula?.id || '',
-      descripcion: 'Aula en el primer piso',
+      descripcion: 'Aula ubicada en el primer piso del Pabellón 11',
       edificio: 'Pabellón 11',
       piso: 1,
     },
+    {
+      nombre: 'Aula 4B-01',
+      latitud: -12.044595,
+      longitud: -76.953088,
+      tipoId: aula?.id || '',
+      descripcion: 'Aula ubicada por el Polideportivo, primer piso',
+      edificio: 'Zona Polideportivo Pabellón 4B',
+      piso: 1,
+    },
+    {
+      nombre: 'Aula 4B-02',
+      latitud: -12.043890,
+      longitud: -76.953908,
+      tipoId: aula?.id || '',
+      descripcion: 'Aula ubicada por el Polideportivo, primer piso',
+      edificio: 'Zona Polideportivo Pabellón 4B',
+      piso: 1,
+    },
+    {
+      nombre: 'Aula 4B-03',
+      latitud: -12.044709,
+      longitud: -76.955788,
+      tipoId: aula?.id || '',
+      descripcion: 'Aula ubicada por el Polideportivo, primer piso',
+      edificio: 'Zona Polideportivo Pabellón 4B',
+      piso: 1,
+    },
 
-    // Laboratorios
+    // 🔬 Laboratorios
     {
       nombre: 'Laboratorio 802',
       latitud: -12.04464,
       longitud: -76.95256,
       tipoId: laboratorio?.id || '',
-      descripcion: 'Laboratorio del pabellón 8',
+      descripcion: 'Laboratorio del Pabellón 8',
       edificio: 'Pabellón 8',
-      piso: 8,
+      piso: 1,
     },
     {
       nombre: 'Laboratorio 1007',
       latitud: -12.04381,
       longitud: -76.95264,
       tipoId: laboratorio?.id || '',
-      descripcion: 'Laboratorio de tecnología',
+      descripcion: 'Laboratorio del Pabellón 10',
       edificio: 'Pabellón 10',
-      piso: 10,
+      piso: 1,
     },
     {
       nombre: 'Laboratorio 812',
       latitud: -12.04414,
       longitud: -76.95256,
       tipoId: laboratorio?.id || '',
-      descripcion: 'Laboratorio especializado',
+      descripcion: 'Laboratorio del Pabellón 8',
       edificio: 'Pabellón 8',
-      piso: 8,
-    },
-
-    // Biblioteca y cafetería (si las necesitas con coordenadas reales)
-    {
-      nombre: 'Biblioteca Central',
-      latitud: -12.04395,
-      longitud: -76.95280,
-      tipoId: biblioteca?.id || '',
-      descripcion: 'Biblioteca principal con sala de estudio',
-      edificio: 'Biblioteca',
       piso: 1,
     },
     {
-      nombre: 'Cafetería Principal',
-      latitud: -12.04430,
-      longitud: -76.95270,
-      tipoId: cafeteria?.id || '',
-      descripcion: 'Zona de alimentación con mesas y sillas',
-      edificio: 'Cafetería',
+      nombre: 'Laboratorio 410',
+      latitud: -12.044723,
+      longitud: -76.952942,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Laboratorio en el Pabellón 4, segundo piso',
+      edificio: 'Pabellón 4',
+      piso: 2,
+    },
+    {
+      nombre: 'Laboratorio 412',
+      latitud: -12.044718,
+      longitud: -76.952995,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Laboratorio en el Pabellón 4, segundo piso',
+      edificio: 'Pabellón 4',
+      piso: 2,
+    },
+    {
+      nombre: 'Laboratorio 411',
+      latitud: -12.044710,
+      longitud: -76.952965,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Laboratorio en el Pabellón 4, segundo piso',
+      edificio: 'Pabellón 4',
+      piso: 2,
+    },
+    {
+      nombre: 'Laboratorio 418',
+      latitud: -12.044685,
+      longitud: -76.953395,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Laboratorio en el Pabellón 4, segundo piso',
+      edificio: 'Pabellón 4',
+      piso: 2,
+    },
+
+    // 🧑‍💼 Oficina
+    {
+      nombre: 'Oficina - Soporte TI',
+      latitud: -12.044688,
+      longitud: -76.9529734,
+      tipoId: oficina?.id || '',
+      descripcion: 'Oficina de Soporte TI en el segundo piso del Pabellón 4',
+      edificio: 'Pabellón 4',
+      piso: 2,
+    },
+
+    // 🚻 Servicios higiénicos
+    {
+      nombre: 'Servicios Higiénicos (Pabellón 4)',
+      latitud: -12.042092,
+      longitud: -76.952253,
+      tipoId: bano?.id || '',
+      descripcion: 'Servicios higiénicos ubicados cerca del Pabellón 4',
+      edificio: 'Pabellón 4',
+      piso: 1,
+    },
+    {
+      nombre: 'SS.HH. Segundo Piso - Pabellón 4',
+      latitud: -12.044695,
+      longitud: -76.953040,
+      tipoId: bano?.id || '',
+      descripcion: 'Servicios higiénicos ubicados en el segundo piso del Pabellón 4',
+      edificio: 'Pabellón 4',
+      piso: 2,
+    },
+
+    // ⚽ Polideportivo
+    {
+      nombre: 'Polideportivo',
+      latitud: -12.044987,
+      longitud: -76.952885,
+      tipoId: polideportivo?.id || '',
+      descripcion: 'Zona del Polideportivo donde también se ubican baños',
+      edificio: 'Polideportivo',
       piso: 1,
     },
   ];
 
+  // Crear lugares si no existen
   for (const placeData of places) {
     if (!placeData.tipoId) {
       console.log(`   ⚠️  Saltando ${placeData.nombre}: tipo no encontrado`);
