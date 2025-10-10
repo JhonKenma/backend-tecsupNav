@@ -436,6 +436,21 @@ export class NavigationService {
       'Mantén activo el GPS para navegación en tiempo real',
     ];
   }
+  /**
+   * Obtener TODOS los lugares (sin filtro de búsqueda)
+   */
+  async getAllPlaces(): Promise<any[]> {
+    return await this.prisma.place.findMany({
+      include: {
+        tipo: true,
+      },
+      orderBy: [
+        { edificio: 'asc' },
+        { piso: 'asc' },
+        { nombre: 'asc' },
+      ],
+    });
+  }
 
   /**
    * Obtener información de navegación actualizada durante el recorrido
