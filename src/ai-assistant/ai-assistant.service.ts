@@ -2,6 +2,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { IntentDetectionService } from './services/intent-detection.service';
 import { OpenAIIntegrationService } from './services/openai-integration.service';
+import { ConversationalAIService } from './services/conversational-ai.service'; // 👈 NUEVO
 import { CommandHandlerService } from './services/command-handler.service';
 import { ConversationHistoryService } from './services/conversation-history.service';
 import { IntentResult, AssistantResponse } from './interfaces';
@@ -19,39 +20,29 @@ export class AIAssistantService {
   constructor(
     private intentDetection: IntentDetectionService,
     private openaiIntegration: OpenAIIntegrationService,
+    private conversationalAI: ConversationalAIService, // 👈 agregado
     private commandHandler: CommandHandlerService,
     private conversationHistory: ConversationHistoryService,
   ) {}
 
   /**
-   * Procesar comando de texto o voz (método principal)
+   * Procesar comando con IA conversacional REAL
    */
   async processCommand(
     userId: string,
     query: string,
-    context?: CommandContext
+    context?: CommandContext,
   ): Promise<AssistantResponse> {
     try {
       this.logger.log(`Processing command for user ${userId}: "${query}"`);
 
-      // 1. Normalizar query
-      const normalizedQuery = this.intentDetection.normalizeQuery(query);
+      // Si la IA conversacional está disponible, usarla
+      if (context?.useAI !== false && this.conversationalAI.isAvailable()) {
+        return await this.processWithConversationalAI(userId, query, context);
+      }
 
-      // 2. Detectar intención
-      const intent = await this.detectIntent(userId, normalizedQuery, context);
-
-      // 3. Manejar según intención
-      const response = await this.handleIntent(userId, intent, context);
-
-      // 4. Guardar en historial
-      this.conversationHistory.saveInteraction( // ✅ corregido
-        userId,
-        query,
-        response.message,
-        intent.intent
-      );
-
-      return response;
+      // Fallback: usar detección de reglas
+      return await this.processWithRules(userId, query, context);
 
     } catch (error) {
       this.logger.error(`Error processing command: ${error.message}`);
@@ -60,28 +51,112 @@ export class AIAssistantService {
   }
 
   /**
-   * Detectar intención (con IA si está disponible)
+   * Procesar con IA conversacional (MODO INTELIGENTE)
+   */
+  private async processWithConversationalAI(
+    userId: string,
+    query: string,
+    context?: CommandContext,
+  ): Promise<AssistantResponse> {
+    try {
+      // Obtener historial reciente
+      const history = this.conversationHistory.getHistory(userId, 5);
+
+      // Obtener respuesta de la IA conversacional
+      const aiResult = await this.conversationalAI.getConversationalResponse(
+        query,
+        history,
+        context,
+      );
+
+      // Ejecutar acción sugerida si aplica
+      let actionData: { placeId: string; place: any; places: any[] } | null = null;
+      if (aiResult.suggestedAction === 'navigate' && aiResult.data?.destination) {
+        const places = await this.commandHandler['navigationService'].searchPlaces({
+          query: aiResult.data.destination,
+          currentLocation: context?.currentLocation,
+          maxResults: 5,
+        });
+
+        if (places.length > 0) {
+          actionData = {
+            placeId: places[0].id,
+            place: places[0],
+            places: places,
+          };
+        }
+      }
+
+      // Crear respuesta
+      const response: AssistantResponse = {
+        message: aiResult.message,
+        intent: {
+          intent: aiResult.intent as any,
+          confidence: aiResult.confidence,
+          entities: aiResult.data || {},
+          originalQuery: query,
+          interpretation: `IA conversacional: ${aiResult.intent}`,
+        },
+        action: aiResult.suggestedAction === 'info' ? 'show_info' : (aiResult.suggestedAction || 'none'),
+        data: actionData,
+      };
+
+      // Guardar interacción en historial
+      this.conversationHistory.saveInteraction(
+        userId,
+        query,
+        aiResult.message,
+        aiResult.intent,
+      );
+
+      return response;
+
+    } catch (error) {
+      this.logger.error(`Conversational AI error: ${error.message}`);
+      // Fallback a reglas
+      return await this.processWithRules(userId, query, context);
+    }
+  }
+
+  /**
+   * Procesar con reglas (modo básico)
+   */
+  private async processWithRules(
+    userId: string,
+    query: string,
+    context?: CommandContext,
+  ): Promise<AssistantResponse> {
+    const normalizedQuery = this.intentDetection.normalizeQuery(query);
+    const intent = await this.detectIntent(userId, normalizedQuery, context);
+    const response = await this.handleIntent(userId, intent, context);
+
+    this.conversationHistory.saveInteraction(
+      userId,
+      query,
+      response.message,
+      intent.intent,
+    );
+
+    return response;
+  }
+
+  /**
+   * Detectar intención (con IA o reglas)
    */
   private async detectIntent(
     userId: string,
     query: string,
-    context?: CommandContext
+    context?: CommandContext,
   ): Promise<IntentResult> {
-    
-    // Primero intentar con reglas (rápido)
     const ruleBasedIntent = this.intentDetection.detectWithRules(query);
 
-    // Si la confianza es alta, usar ese resultado
     if (ruleBasedIntent.confidence > 0.8) {
       return ruleBasedIntent;
     }
 
-    // Si OpenAI está disponible y el usuario quiere usarlo
     if (context?.useAI !== false && this.openaiIntegration.isAvailable()) {
       try {
         const aiIntent = await this.openaiIntegration.detectIntent(query, context);
-        
-        // Si IA tiene mayor confianza, usar ese resultado
         if (aiIntent.confidence > ruleBasedIntent.confidence) {
           return aiIntent;
         }
@@ -99,26 +174,24 @@ export class AIAssistantService {
   private async handleIntent(
     userId: string,
     intent: IntentResult,
-    context?: CommandContext
+    context?: CommandContext,
   ): Promise<AssistantResponse> {
-    
     switch (intent.intent) {
       case 'navigate':
         return await this.commandHandler.handleNavigate(userId, intent, context);
-      
+
       case 'search':
         return await this.commandHandler.handleSearch(userId, intent, context);
-      
+
       case 'information':
         return await this.commandHandler.handleInformation(userId, intent, context);
-      
+
       case 'greeting':
         return this.commandHandler.handleGreeting();
-      
+
       case 'help':
         return this.commandHandler.handleHelp();
-      
-      case 'unknown':
+
       default:
         return this.commandHandler.handleUnknown(intent);
     }
@@ -128,7 +201,7 @@ export class AIAssistantService {
    * Obtener historial de conversación
    */
   getConversationHistory(userId: string, limit?: number) {
-    return this.conversationHistory.getHistory(userId, limit); // ✅ corregido
+    return this.conversationHistory.getHistory(userId, limit);
   }
 
   /**
@@ -142,21 +215,21 @@ export class AIAssistantService {
    * Obtener estadísticas del usuario
    */
   getUserStats(userId: string) {
-    return this.conversationHistory.getUserStats(userId); // ✅ corregido
+    return this.conversationHistory.getUserStats(userId);
   }
 
   /**
    * Obtener estadísticas globales (admin)
    */
   getGlobalStats() {
-    return this.conversationHistory.getGlobalStats(); // ✅ corregido
+    return this.conversationHistory.getGlobalStats();
   }
 
   /**
-   * Verificar si OpenAI está disponible
+   * Verificar si IA conversacional está disponible
    */
   isAIAvailable(): boolean {
-    return this.openaiIntegration.isAvailable();
+    return this.conversationalAI.isAvailable();
   }
 
   /**
@@ -164,7 +237,8 @@ export class AIAssistantService {
    */
   private createErrorResponse(query: string, error: string): AssistantResponse {
     return {
-      message: 'Lo siento, ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo.',
+      message:
+        'Lo siento, ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo.',
       intent: {
         intent: 'unknown',
         confidence: 0,
