@@ -7,6 +7,7 @@ import { AIAssistantController } from './ai-assistant.controller';
 import { AIAssistantGateway } from './ai-assistant.gateway';
 import { IntentDetectionService } from './services/intent-detection.service';
 import { OpenAIIntegrationService } from './services/openai-integration.service';
+import { ConversationalAIService } from './services/conversational-ai.service'; // ✅ NUEVO
 import { CommandHandlerService } from './services/command-handler.service';
 import { ConversationHistoryService } from './services/conversation-history.service';
 import { NavigationModule } from '../navigation/navigation.module';
@@ -30,6 +31,7 @@ import { NavigationModule } from '../navigation/navigation.module';
     AIAssistantGateway,
     IntentDetectionService,
     OpenAIIntegrationService,
+    ConversationalAIService, // ✅ AÑADIDO
     CommandHandlerService,
     ConversationHistoryService,
   ],
