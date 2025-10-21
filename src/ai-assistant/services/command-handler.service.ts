@@ -82,7 +82,7 @@ export class CommandHandlerService {
           message: `No encontré lugares relacionados con "${searchTerm}".`,
           intent,
           action: 'none',
-          suggestions: ['Intenta buscar: aulas, laboratorios, cafetería, biblioteca'],
+          suggestions: ['Intenta buscar: aulas, laboratorios,Pabellones, cafetería, biblioteca'],
         };
       }
 
@@ -155,11 +155,11 @@ export class CommandHandlerService {
 /**
  * Manejar saludo
  */
-handleGreeting(): AssistantResponse {
+handleGreeting(userName?: string): AssistantResponse {
   const greetings = [
-    '¡Hola! Soy tu asistente de navegación del campus Tecsup. ¿A dónde quieres ir?',
-    '¡Hey! ¿En qué puedo ayudarte? Puedo llevarte a cualquier lugar del campus.',
-    '¡Hola! Dime a dónde necesitas ir y te guiaré. Conozco todas las aulas, laboratorios y servicios.',
+    `¡Hola${userName ? ' ' + userName : ''}! 🎓 Soy tu asistente de navegación del campus Tecsup. ¿A dónde quieres ir?`,
+    `¡Hey${userName ? ' ' + userName : ''}! 👋 ¿En qué puedo ayudarte? Puedo llevarte a cualquier lugar del campus.`,
+    `¡Hola${userName ? ' ' + userName : ''}! 😊 Dime a dónde necesitas ir y te guiaré. Conozco todas las aulas, laboratorios y servicios.`,
   ];
 
   return {
