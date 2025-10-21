@@ -159,20 +159,20 @@ export class ConversationalAIService {
     }
   }
 
-  /**
-   * Construir la conversación completa
-   */
-  private buildConversation(
-    userQuery: string,
-    history: Array<{query: string; response: string}>,
-    context?: any,
-  ): ChatMessage[] {
-    const messages: ChatMessage[] = [];
+/**
+ * Construir la conversación completa
+ */
+private buildConversation(
+  userQuery: string,
+  history: Array<{query: string; response: string}>,
+  context?: any,
+): ChatMessage[] {
+  const messages: ChatMessage[] = [];
 
-    // Sistema: Personalidad y conocimiento
-    messages.push({
-      role: 'system',
-      content: `Eres un asistente virtual amigable y servicial del campus Tecsup Lima. Tu nombre es "Tecsup Assistant".
+  // Sistema: Personalidad y conocimiento
+  messages.push({
+    role: 'system',
+    content: `Eres un asistente virtual amigable y servicial del campus Tecsup Lima. Tu nombre es "Tecsup Assistant".
 
 TU PERSONALIDAD:
 - Eres amable, conversacional y natural
@@ -181,6 +181,7 @@ TU PERSONALIDAD:
 - No eres robótico, eres como un amigo que conoce bien el campus
 - Puedes hacer pequeñas bromas o comentarios amigables
 - Si no sabes algo, lo admites con honestidad
+- 🔥 IMPORTANTE: SIEMPRE recuerdas el contexto de la conversación anterior
 
 TU CONOCIMIENTO:
 ${this.placesContext}
@@ -191,44 +192,43 @@ TUS CAPACIDADES:
 ✅ Dar información detallada sobre ubicaciones
 ✅ Responder preguntas sobre el campus
 ✅ Sugerir rutas y lugares cercanos
+✅ 🔥 MANTENER contexto de conversaciones previas
 
-CÓMO RESPONDES:
-- Si te preguntan por un lugar específico que existe, proporciona información útil y ofrece ayuda para llegar
-- Si te preguntan por algo que NO existe, sugiere alternativas similares
-- Si la pregunta es vaga, pide más detalles de forma amigable
-- Siempre intenta ser útil y proactivo
-- Adapta tu respuesta al contexto de la conversación
+CÓMO MANEJAS EL CONTEXTO:
+- Si el usuario dice "sí necesito ayuda" o similar, revisa el mensaje anterior
+- Si mencionaste lugares en el mensaje anterior, úsalos en tu respuesta
+- Mantén coherencia con lo que dijiste antes
+- Si el usuario se refiere a "eso", "ahí", "allí", usa el contexto previo
 
-IMPORTANTE:
-- No inventes lugares que no están en la lista
-- Si mencionan "laboratorio", "aula", etc., usa los nombres exactos de la lista
-- Sé específico con las ubicaciones (pabellón, piso)
-- Ofrece ayuda adicional al final de cada respuesta`,
-    });
+IMPORTANTE AL DAR DIRECCIONES:
+- Cuando el usuario CONFIRME que quiere ayuda para llegar, responde: "Perfecto, te llevaré a [LUGAR EXACTO]. Iniciando navegación..."
+- NO des instrucciones manuales, el sistema iniciará la navegación automática
+- Sé específico con el lugar exacto (ejemplo: "SS.HH. Segundo Piso - Pabellón 4")`,
+  });
 
-    // Historial de conversación (últimos 5 mensajes)
-    const recentHistory = history.slice(-5);
-    recentHistory.forEach(entry => {
-      messages.push(
-        { role: 'user', content: entry.query },
-        { role: 'assistant', content: entry.response },
-      );
-    });
+  // 🔥 Historial de conversación (últimos 10 mensajes en lugar de 5)
+  const recentHistory = history.slice(-10);
+  recentHistory.forEach(entry => {
+    messages.push(
+      { role: 'user', content: entry.query },
+      { role: 'assistant', content: entry.response },
+    );
+  });
 
-    // Contexto adicional (ubicación actual)
-    let userMessage = userQuery;
-    if (context?.currentLocation) {
-      userMessage += `\n\n[Contexto: El usuario está actualmente en lat: ${context.currentLocation.lat}, lng: ${context.currentLocation.lng}]`;
-    }
-
-    // Mensaje actual del usuario
-    messages.push({
-      role: 'user',
-      content: userMessage,
-    });
-
-    return messages;
+  // Contexto adicional (ubicación actual)
+  let userMessage = userQuery;
+  if (context?.currentLocation) {
+    userMessage += `\n\n[Contexto: El usuario está actualmente en lat: ${context.currentLocation.lat}, lng: ${context.currentLocation.lng}]`;
   }
+
+  // Mensaje actual del usuario
+  messages.push({
+    role: 'user',
+    content: userMessage,
+  });
+
+  return messages;
+}
 
   /**
    * Analizar respuesta de la IA para extraer intención
@@ -245,6 +245,16 @@ IMPORTANTE:
     const lowerQuery = userQuery.toLowerCase();
     const lowerResponse = aiResponse.toLowerCase();
 
+    
+    // 🔥 Detectar confirmación de ayuda
+    if (/(sí|si|claro|por favor|necesito|ayuda|llévame|quiero ir)/i.test(lowerQuery) &&
+        /iniciar|navegación|llevar|guiar/i.test(lowerResponse)) {
+      return {
+        intent: 'navigate',
+        confidence: 0.95,
+        action: 'navigate',
+      };
+    }
     // Detectar intención basada en el query y la respuesta
     if (/(llévame|ir a|cómo llego|navegar|quiero ir)/i.test(lowerQuery)) {
       // Extraer nombre del lugar mencionado en la respuesta
