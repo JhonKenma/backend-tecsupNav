@@ -1,5 +1,5 @@
 // src/auth/auth.service.ts
-import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
@@ -202,4 +202,18 @@ export class AuthService { // ✅ Asegurarse que tenga 'export'
       throw error;
     }
   }
+  
+  async getUserProfile(userId: string) {
+    const user = await this.usersService.findById(userId);
+    
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // Remover información sensible
+    const { password, ...userProfile } = user;
+    
+    return userProfile;
+  }
+
 }

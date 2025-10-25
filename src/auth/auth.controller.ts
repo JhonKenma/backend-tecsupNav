@@ -142,11 +142,31 @@ export class AuthController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@CurrentUser() user) {
-    const { password, ...userWithoutPassword } = user;
-    return {
-      success: true,
-      data: userWithoutPassword,
-    };
+    try {
+      // Obtener información completa del usuario desde el objeto provisto por el decorator
+      const userProfile = user;
+      
+      return {
+        success: true,
+        message: 'Perfil obtenido exitosamente',
+        data: {
+          id: userProfile.id,
+          email: userProfile.email,
+          nombreCompleto: `${userProfile.firstName} ${userProfile.lastName}`,
+          firstName: userProfile.firstName,
+          lastName: userProfile.lastName,
+          avatar: userProfile.avatar || null, // Imagen de perfil
+          role: userProfile.role,
+          createdAt: userProfile.createdAt,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        statusCode: HttpStatus.NOT_FOUND,
+      };
+    }
   }
 
   @Get('mobile/dashboard')
