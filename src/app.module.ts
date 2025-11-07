@@ -11,7 +11,8 @@ import { PlaceTypesModule } from './place-types/place-types.module';
 import { PlacesModule } from './places/places.module';
 import { CustomRoutesModule } from './custom-routes/custom-routes.module';
 import { NavigationModule } from './navigation/navigation.module';
-import { AIAssistantModule } from './ai-assistant/ai-assistant.module'; // ✅ Nuevo módulo
+import { AIAssistantModule } from './ai-assistant/ai-assistant.module';
+import { StorageModule } from './storage/storage.module'; // ✅ AÑADIR ESTA LÍNEA
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -24,17 +25,17 @@ import { AppService } from './app.service';
     ThrottlerModule.forRoot([
       {
         name: 'short',
-        ttl: 1000, // 1 segundo
+        ttl: 1000,
         limit: 3,
       },
       {
         name: 'medium',
-        ttl: 10000, // 10 segundos
+        ttl: 10000,
         limit: 20,
       },
       {
         name: 'long',
-        ttl: 60000, // 1 minuto
+        ttl: 60000,
         limit: 100,
       },
     ]),
@@ -42,6 +43,7 @@ import { AppService } from './app.service';
     // ✅ Base de datos y servicios globales
     PrismaModule,
     GoogleMapsModule,
+    StorageModule, // ✅ AÑADIR AQUÍ
 
     // ✅ Módulos de autenticación y usuarios
     AuthModule,
@@ -59,7 +61,6 @@ import { AppService } from './app.service';
   controllers: [AppController],
   providers: [
     AppService,
-    // ✅ Aplicación global del guard de rate limiting
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
