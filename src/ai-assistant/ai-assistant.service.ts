@@ -136,8 +136,9 @@ private async processWithConversationalAI(
           },
           action: 'navigate',
           data: {
-            placeId: place.id,
-            place: place,
+            places: places,  // ✅ CAMBIO: Siempre array
+            //placeId: place.id,
+            //place: place,
           },
         };
       }
@@ -159,8 +160,9 @@ private async processWithConversationalAI(
           : '';
 
         actionData = {
-          placeId: place.id,
-          place: place,
+          places: places,  // ✅ CAMBIO: Array con 1 elemento
+          //placeId: place.id,
+          //place: place,
         };
 
         finalMessage = `Perfecto, te llevaré a ${place.nombre}. ${distanceInfo}`;
@@ -168,7 +170,9 @@ private async processWithConversationalAI(
 
       } else if (places.length > 1) {
         // 🔀 MÚLTIPLES RESULTADOS: Pedir confirmación
-        actionData = { places };
+        actionData = { 
+          places: places  // ✅ CAMBIO: Siempre array
+        };
         finalMessage = `Encontré ${places.length} lugares con "${destination}". ¿A cuál quieres ir?`;
         finalAction = 'none';
 
@@ -214,7 +218,9 @@ private async processWithConversationalAI(
       });
 
       if (places.length > 0) {
-        actionData = { places };
+        actionData = { 
+          places: places  // ✅ CAMBIO: Siempre array
+         };
         finalMessage = `Encontré ${places.length} lugares relacionados con "${destination}":`;
         finalAction = 'search';
       }
@@ -293,24 +299,36 @@ private buildPlaceDescription(place: any): string {
   /**
    * Procesar con reglas (modo básico)
    */
-  private async processWithRules(
-    userId: string,
-    query: string,
-    context?: CommandContext,
-  ): Promise<AssistantResponse> {
-    const normalizedQuery = this.intentDetection.normalizeQuery(query);
-    const intent = await this.detectIntent(userId, normalizedQuery, context);
-    const response = await this.handleIntent(userId, intent, context);
-
-    this.conversationHistory.saveInteraction(
-      userId,
-      query,
-      response.message,
-      intent.intent,
-    );
-
-    return response;
+private async processWithRules(
+  userId: string,
+  query: string,
+  context?: CommandContext,
+): Promise<AssistantResponse> {
+  const normalizedQuery = this.intentDetection.normalizeQuery(query);
+  const intent = await this.detectIntent(userId, normalizedQuery, context);
+  
+  // 🔥 NUEVO: Interceptar respuesta para normalizar estructura
+  let response = await this.handleIntent(userId, intent, context);
+  
+  // 🔥 Normalizar data.place → data.places (siempre array)
+  if (response.data && response.data.place && !response.data.places) {
+    response = {
+      ...response,
+      data: {
+        places: [response.data.place],  // ✅ Convertir a array
+      },
+    };
   }
+
+  this.conversationHistory.saveInteraction(
+    userId,
+    query,
+    response.message,
+    intent.intent,
+  );
+
+  return response;
+}
 
   /**
    * Detectar intención (con IA o reglas)
