@@ -174,6 +174,8 @@ async function seedPlaces() {
   const oficina = await prisma.placeType.findFirst({ where: { nombre: 'Oficina' } });
   const bano = await prisma.placeType.findFirst({ where: { nombre: 'Baño' } });
   const polideportivo = await prisma.placeType.findFirst({ where: { nombre: 'Polideportivo' } });
+  const pabellon = await prisma.placeType.findFirst({ where: { nombre: 'Pabellón' } });
+
 
   // Solo los lugares reales registrados
   const places = [
@@ -299,17 +301,6 @@ async function seedPlaces() {
       edificio: 'Pabellón 4',
       piso: 2,
     },
-
-    // 🚻 Servicios higiénicos
-    {
-      nombre: 'Servicios Higiénicos (Pabellón 4)',
-      latitud: -12.042092,
-      longitud: -76.952253,
-      tipoId: bano?.id || '',
-      descripcion: 'Servicios higiénicos ubicados cerca del Pabellón 4',
-      edificio: 'Pabellón 4',
-      piso: 1,
-    },
     {
       nombre: 'SS.HH. Segundo Piso - Pabellón 4',
       latitud: -12.044695,
@@ -330,6 +321,62 @@ async function seedPlaces() {
       edificio: 'Polideportivo',
       piso: 1,
     },
+    // 🏢 Lugares adicionales reales
+    {
+      nombre: 'Pabellón 9',
+      latitud: -12.04431,
+      longitud: -76.95331,
+      tipoId: pabellon?.id || '',
+      descripcion: 'Está cerca de la plazuela.',
+      edificio: 'Pabellón 9',
+      piso: 1,
+    },
+    {
+      nombre: 'Laboratorio 902',
+      latitud: -12.04422,
+      longitud: -76.95319,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Está en el pabellón 9 cerca de la plazuela.',
+      edificio: 'Pabellón 9',
+      piso: 1,
+    },
+    {
+      nombre: 'Laboratorio 710',
+      latitud: -12.04442,
+      longitud: -76.95342,
+      tipoId: laboratorio?.id || '',
+      descripcion: 'Está al final del pabellón 7.',
+      edificio: 'Pabellón 7',
+      piso: 1,
+    },
+    {
+      nombre: 'Aula 408',
+      latitud: -12.04461,
+      longitud: -76.95344,
+      tipoId: aula?.id || '',
+      descripcion: 'Se encuentra por el pabellón 4 al final.',
+      edificio: 'Pabellón 4',
+      piso: 1,
+    },
+    {
+      nombre: 'Aula 409',
+      latitud: -12.04475,
+      longitud: -76.95347,
+      tipoId: aula?.id || '',
+      descripcion: 'Está por el pabellón 4.',
+      edificio: 'Pabellón 4',
+      piso: 1,
+    },
+    {
+      nombre: 'Pabellón 16',
+      latitud: -12.043340,
+      longitud: -76.952808,
+      tipoId: pabellon?.id || '',
+      descripcion: 'Pabellón 16 ubicado al norte del campus.',
+      edificio: 'Pabellón 16',
+      piso: 0,
+    },
+
   ];
 
   // Crear lugares si no existen
