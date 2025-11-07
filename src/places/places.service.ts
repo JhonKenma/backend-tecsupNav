@@ -2,6 +2,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GoogleMapsService } from '../google-maps/google-maps.service';
+import { StorageService } from '../storage/storage.service';
 import { CreatePlaceDto } from './dto/create-place.dto';
 import { UpdatePlaceDto } from './dto/update-place.dto';
 import { SearchPlacesDto } from './dto/search-places.dto';
@@ -13,9 +14,10 @@ export class PlacesService {
   constructor(
     private prisma: PrismaService,
     private googleMapsService: GoogleMapsService,
+    private storageService: StorageService, // Añadir el servicio de storage
   ) {}
 
-  async create(createPlaceDto: CreatePlaceDto) {
+  async create(createPlaceDto: CreatePlaceDto, file?: Express.Multer.File) {
     // Validar que el tipo de lugar existe
     const placeType = await this.prisma.placeType.findUnique({
       where: { id: createPlaceDto.tipoId },
@@ -54,8 +56,23 @@ export class PlacesService {
       createPlaceDto.codigoQR = this.generateUniqueQRCode(createPlaceDto.nombre);
     }
 
+    // Subir imagen a Supabase si se proporcionó un archivo
+    let imagenUrl: string | null = null;
+    if (file) {
+      try {
+        imagenUrl = await this.storageService.uploadImage(file);
+        this.logger.log(`Image uploaded for place: ${imagenUrl}`);
+      } catch (error) {
+        this.logger.error(`Failed to upload image: ${error.message}`);
+        throw new BadRequestException('Error al subir la imagen');
+      }
+    }
+
     return this.prisma.place.create({
-      data: createPlaceDto,
+      data: {
+        ...createPlaceDto,
+        imagen: imagenUrl,
+      },
       include: {
         tipo: true,
       },
@@ -168,7 +185,7 @@ export class PlacesService {
     return place;
   }
 
-  async update(id: string, updatePlaceDto: UpdatePlaceDto) {
+  async update(id: string, updatePlaceDto: UpdatePlaceDto, file?: Express.Multer.File) {
     // Verificar que el lugar existe
     const existingPlace = await this.findOne(id);
 
@@ -198,9 +215,31 @@ export class PlacesService {
       }
     }
 
+    // Si se proporciona una nueva imagen
+    let imagenUrl = existingPlace.imagen;
+    if (file) {
+      try {
+        // Eliminar imagen anterior si existe
+        if (existingPlace.imagen) {
+          await this.storageService.deleteImage(existingPlace.imagen);
+          this.logger.log(`Old image deleted for place ${id}`);
+        }
+
+        // Subir nueva imagen
+        imagenUrl = await this.storageService.uploadImage(file);
+        this.logger.log(`New image uploaded for place ${id}: ${imagenUrl}`);
+      } catch (error) {
+        this.logger.error(`Failed to update image: ${error.message}`);
+        throw new BadRequestException('Error al actualizar la imagen');
+      }
+    }
+
     return this.prisma.place.update({
       where: { id },
-      data: updatePlaceDto,
+      data: {
+        ...updatePlaceDto,
+        imagen: imagenUrl,
+      },
       include: {
         tipo: true,
       },
@@ -209,7 +248,7 @@ export class PlacesService {
 
   async remove(id: string) {
     // Verificar que el lugar existe
-    await this.findOne(id);
+    const place = await this.findOne(id);
 
     // Verificar que no tenga rutas asociadas
     const routesCount = await this.prisma.customRoute.count({
@@ -223,6 +262,17 @@ export class PlacesService {
 
     if (routesCount > 0) {
       throw new ConflictException(`No se puede eliminar el lugar porque tiene ${routesCount} rutas asociadas`);
+    }
+
+    // Eliminar imagen de Supabase si existe
+    if (place.imagen) {
+      try {
+        await this.storageService.deleteImage(place.imagen);
+        this.logger.log(`Image deleted for place ${id}`);
+      } catch (error) {
+        this.logger.warn(`Failed to delete image: ${error.message}`);
+        // No lanzar error, continuar con la eliminación del lugar
+      }
     }
 
     return this.prisma.place.delete({
