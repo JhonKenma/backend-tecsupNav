@@ -263,7 +263,9 @@ O di "ayuda" para ver más ejemplos.`,
       message: `Perfecto, te llevaré a ${place.nombre}. ${distanceInfo}`,
       intent,
       action: 'navigate',
-      data: { placeId: place.id, place },
+      data: { 
+        places: [place],  // ✅ CAMBIO: Siempre array
+       },
     };
   }
 
@@ -278,7 +280,9 @@ O di "ayuda" para ver más ejemplos.`,
         label: place.nombre,
         description: this.buildPlaceDescription(place),
       })),
-      data: { places },
+      data: { 
+        places: places,  // ✅ CAMBIO: Siempre array
+       },
     };
   }
 
