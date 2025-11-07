@@ -90,4 +90,28 @@ model CustomRoute {
   // Índice para optimizar búsquedas
   @@index([origenId, destinoId])
   @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
+}dice para optimizar búsquedas
+  @@index([origenId, destinoId])
+  @@map("custom_routes")
 }
