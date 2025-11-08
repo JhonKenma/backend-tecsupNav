@@ -8,6 +8,9 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
+  const configService = app.get(ConfigService);
+  
+  // ✅ CORS configurado para producción
   app.enableCors({ 
     origin: [
       'http://localhost:3000',
@@ -16,9 +19,13 @@ async function bootstrap() {
       'http://localhost:8081',
       'exp://localhost:19000',
       'exp://192.168.18.171:19000',
-      process.env.WEB_URL,
-      process.env.MOBILE_URL,
-    ],
+      // ✅ Agregar tus dominios de producción
+      'https://josephhuayra.online',
+      'https://www.josephhuayra.online',
+      'https://api.josephhuayra.online',
+      configService.get('WEB_URL'),
+      configService.get('MOBILE_URL'),
+    ].filter(url => url), // Filtrar undefined/null
     credentials: true,
     methods: ['GET', 'POST', 'PUT','PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -51,7 +58,6 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
 
-  // Configurar Swagger UI
   SwaggerModule.setup('api/docs', app, document, {
     customSiteTitle: 'Tecsup Navigation API',
     customCss: `
@@ -62,15 +68,16 @@ async function bootstrap() {
     customfavIcon: 'https://nestjs.com/img/logo-small.svg',
   });
 
-  const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
 
+  // ✅ IMPORTANTE: 0.0.0.0 para que Render pueda acceder
   await app.listen(port, '0.0.0.0');
-  console.log(`🚀 Tecsup Navigation API running on: http://localhost:${port}/api`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
-  console.log(`📱 Health check: http://localhost:${port}/api/health`);
-  console.log(`🔐 Auth endpoints: http://localhost:${port}/api/auth`);
-  console.log(`📶 Network accessible: http://192.168.18.171:${port}/api`);
+  
+  const nodeEnv = configService.get('NODE_ENV', 'development');
+  console.log(`🚀 Tecsup Navigation API running on port ${port}`);
+  console.log(`🌍 Environment: ${nodeEnv}`);
+  console.log(`📚 API Documentation: /api/docs`);
+  console.log(`📱 Health check: /api/health`);
 }
 
 bootstrap();
