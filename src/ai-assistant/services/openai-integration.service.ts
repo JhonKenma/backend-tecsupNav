@@ -2,6 +2,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OpenAI } from 'openai';
+import CircuitBreaker from 'opossum';
 import { IntentResult } from '../interfaces/intent-result.interface';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class OpenAIIntegrationService {
   private readonly logger = new Logger(OpenAIIntegrationService.name);
   private openai: OpenAI | null = null;
   private isConfigured = false;
+  private circuitBreaker: CircuitBreaker | null = null;
 
   constructor(private configService: ConfigService) {
     this.initializeOpenAI();
@@ -26,7 +28,32 @@ export class OpenAIIntegrationService {
     try {
       this.openai = new OpenAI({ apiKey });
       this.isConfigured = true;
-      this.logger.log('OpenAI integration initialized successfully');
+
+      // 🔥 Configurar Circuit Breaker
+      this.circuitBreaker = new CircuitBreaker(
+        async (params: any) => {
+          return await this.openai!.chat.completions.create(params);
+        },
+        {
+          timeout: 10000, // 10 segundos
+          errorThresholdPercentage: 50, // Abrir si 50% de requests fallan
+          resetTimeout: 30000, // Reintentar después de 30 segundos
+        }
+      );
+
+      this.circuitBreaker.on('open', () => {
+        this.logger.warn('⚠️ Circuit breaker ABIERTO - OpenAI no disponible');
+      });
+
+      this.circuitBreaker.on('halfOpen', () => {
+        this.logger.log('Circuit breaker MEDIO-ABIERTO - Probando OpenAI...');
+      });
+
+      this.circuitBreaker.on('close', () => {
+        this.logger.log('✅ Circuit breaker CERRADO - OpenAI funcionando');
+      });
+
+      this.logger.log('✅ OpenAI integration initialized with Circuit Breaker');
     } catch (error) {
       this.logger.error(`Failed to initialize OpenAI: ${error.message}`);
       this.isConfigured = false;
@@ -37,14 +64,17 @@ export class OpenAIIntegrationService {
    * Verificar si OpenAI está configurado
    */
   isAvailable(): boolean {
-    return this.isConfigured && this.openai !== null;
+    return this.isConfigured && 
+           this.openai !== null && 
+           this.circuitBreaker !== null &&
+           !this.circuitBreaker.opened;
   }
 
   /**
-   * Detectar intención usando OpenAI
+   * 🔥 Detectar intención con Circuit Breaker
    */
   async detectIntent(query: string, context?: any): Promise<IntentResult> {
-    if (!this.isAvailable()) {
+    if (!this.isAvailable() || !this.circuitBreaker) {
       throw new Error('OpenAI is not available');
     }
 
@@ -52,7 +82,7 @@ export class OpenAIIntegrationService {
     const userPrompt = this.buildUserPrompt(query, context);
 
     try {
-      const completion = await this.openai!.chat.completions.create({
+      const completion = await this.circuitBreaker.fire({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
@@ -60,10 +90,10 @@ export class OpenAIIntegrationService {
         ],
         temperature: 0.3,
         response_format: { type: 'json_object' },
-        max_tokens: 500,
-      });
+        max_tokens: 300, // 🔥 Reducido de 500
+      }) as any;
 
-      const content = completion.choices[0].message.content;
+      const content = (completion?.choices && completion.choices[0]?.message?.content) ?? null;
       if (!content) {
         throw new Error('OpenAI response content is null');
       }
@@ -150,13 +180,13 @@ REGLAS IMPORTANTES:
   }
 
   /**
-   * Obtener respuesta conversacional de OpenAI
+   * 🔥 Respuesta conversacional con Circuit Breaker
    */
   async getChatResponse(
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     systemContext?: string
   ): Promise<string> {
-    if (!this.isAvailable()) {
+    if (!this.isAvailable() || !this.circuitBreaker) {
       throw new Error('OpenAI is not available');
     }
 
@@ -164,11 +194,12 @@ REGLAS IMPORTANTES:
       if (!this.openai) {
         throw new Error('OpenAI is not initialized');
       }
-      // Filter out any messages that are not valid roles for OpenAI
+      
       const validMessages = messages.filter(
         (msg) => ['system', 'user', 'assistant'].includes(msg.role)
       );
-      const completion = await this.openai.chat.completions.create({
+      
+      const completion = await this.circuitBreaker.fire({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemContext || 'Eres un asistente útil.' },
@@ -176,9 +207,9 @@ REGLAS IMPORTANTES:
         ],
         temperature: 0.7,
         max_tokens: 300,
-      });
+      }) as any;
 
-      const content = completion.choices[0].message.content;
+      const content = (completion?.choices && completion.choices[0]?.message?.content) ?? null;
       if (content === null) {
         throw new Error('OpenAI chat response content is null');
       }
