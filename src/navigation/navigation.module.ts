@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { NavigationService } from './navigation.service';
 import { NavigationController } from './navigation.controller';
+import { PlacesCacheService } from './services/places-cache.service';
 import { NavigationGateway } from './navigation.gateway';
 import { PlacesModule } from '../places/places.module';
 import { CustomRoutesModule } from '../custom-routes/custom-routes.module';
@@ -23,7 +24,7 @@ import { CustomRoutesModule } from '../custom-routes/custom-routes.module';
     }),
   ],
   controllers: [NavigationController],
-  providers: [NavigationService, NavigationGateway],
-  exports: [NavigationService, NavigationGateway],
+  providers: [NavigationService, NavigationGateway, PlacesCacheService],
+  exports: [NavigationService, NavigationGateway, PlacesCacheService],
 })
 export class NavigationModule {}
