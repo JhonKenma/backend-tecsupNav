@@ -1,3 +1,4 @@
+// src/ai-assistant/services/conversational-ai.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OpenAI } from 'openai';
@@ -44,11 +45,17 @@ export class ConversationalAIService {
   }
 
   /**
-   * Cargar contexto de lugares desde la BD
+   * 🔥 Cargar contexto con timeout y retry
    */
   private async loadPlacesContext() {
     try {
-         const places = await this.navigationService.getAllPlaces();
+      // Timeout de 5 segundos
+      const places = await Promise.race([
+        this.navigationService.getAllPlaces(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        ),
+      ]) as any[];
 
       // Agrupar por tipo
       const grouped = places.reduce((acc, place) => {
@@ -58,17 +65,17 @@ export class ConversationalAIService {
         return acc;
       }, {});
 
-      // Construir contexto legible
-      let context = '=== INFORMACIÓN DEL CAMPUS TECSUP LIMA ===\n\n';
+      // Construir contexto legible (limitado)
+      let context = '=== LUGARES DEL CAMPUS TECSUP ===\n\n';
 
       for (const [tipo, lugares] of Object.entries(grouped)) {
-        context += `${tipo.toUpperCase()}S DISPONIBLES:\n`;
-        (lugares as any[]).forEach(lugar => {
+        context += `${tipo.toUpperCase()}S:\n`;
+        // 🔥 Limitar a 20 lugares por tipo para no sobrecargar
+        (lugares as any[]).slice(0, 20).forEach(lugar => {
           context += `- ${lugar.nombre}`;
-          if (lugar.edificio) context += ` (ubicado en ${lugar.edificio}`;
+          if (lugar.edificio) context += ` (${lugar.edificio}`;
           if (lugar.piso) context += `, piso ${lugar.piso}`;
           if (lugar.edificio) context += ')';
-          if (lugar.descripcion) context += ` - ${lugar.descripcion}`;
           context += `\n`;
         });
         context += '\n';
@@ -77,7 +84,7 @@ export class ConversationalAIService {
       // Agregar información adicional
       const edificios = [...new Set(places.filter(p => p.edificio).map(p => p.edificio))];
       if (edificios.length > 0) {
-        context += 'PABELLONES/EDIFICIOS:\n';
+        context += 'PABELLONES:\n';
         edificios.forEach(e => context += `- ${e}\n`);
         context += '\n';
       }
@@ -85,20 +92,21 @@ export class ConversationalAIService {
       this.placesContext = context;
       this.lastContextUpdate = new Date();
       
-      this.logger.log(`✅ Loaded ${places.length} places into AI context`);
+      this.logger.log(`✅ Contexto cargado: ${places.length} lugares`);
     } catch (error) {
-      this.logger.error(`Error loading places context: ${error.message}`);
-      this.placesContext = 'No se pudo cargar información del campus.';
+      this.logger.error(`Error loading context: ${error.message}`);
+      // 🔥 Usar contexto vacío como fallback
+      this.placesContext = 'Información del campus temporalmente no disponible.';
     }
   }
 
   /**
-   * Refrescar contexto si es necesario
+   * 🔥 Refrescar contexto solo si es necesario (10 minutos)
    */
   private async refreshContextIfNeeded() {
-    const fiveMinutes = 5 * 60 * 1000;
+    const tenMinutes = 10 * 60 * 1000; // Aumentado de 5 a 10 minutos
     if (!this.lastContextUpdate || 
-        Date.now() - this.lastContextUpdate.getTime() > fiveMinutes) {
+        Date.now() - this.lastContextUpdate.getTime() > tenMinutes) {
       await this.loadPlacesContext();
     }
   }
@@ -111,7 +119,7 @@ export class ConversationalAIService {
   }
 
   /**
-   * MÉTODO PRINCIPAL: Obtener respuesta conversacional
+   * 🔥 MÉTODO PRINCIPAL: Respuesta conversacional con timeout
    */
   async getConversationalResponse(
     userQuery: string,
@@ -133,16 +141,22 @@ export class ConversationalAIService {
     const messages = this.buildConversation(userQuery, conversationHistory, context);
 
     try {
-      const completion = await this.openai!.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: messages,
-        temperature: 0.7, // Más natural
-        max_tokens: 800,
-      });
+      // 🔥 Timeout de 10 segundos para OpenAI
+      const completion = await Promise.race([
+        this.openai!.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 500, // 🔥 Reducido de 800
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('OpenAI timeout')), 10000)
+        ),
+      ]) as any;
 
       const aiResponse = completion.choices[0].message.content || '';
 
-      // Analizar la respuesta para extraer intención y acción sugerida
+      // Analizar la respuesta
       const analysis = await this.analyzeResponse(userQuery, aiResponse);
 
       return {
@@ -159,20 +173,20 @@ export class ConversationalAIService {
     }
   }
 
-/**
- * Construir la conversación completa
- */
-private buildConversation(
-  userQuery: string,
-  history: Array<{query: string; response: string}>,
-  context?: any,
-): ChatMessage[] {
-  const messages: ChatMessage[] = [];
+  /**
+   * Construir la conversación completa
+   */
+  private buildConversation(
+    userQuery: string,
+    history: Array<{query: string; response: string}>,
+    context?: any,
+  ): ChatMessage[] {
+    const messages: ChatMessage[] = [];
 
-  // Sistema: Personalidad y conocimiento
-  messages.push({
-    role: 'system',
-    content: `Eres un asistente virtual amigable y servicial del campus Tecsup Lima. Tu nombre es "Tecsup Assistant".
+    // Sistema: Personalidad y conocimiento
+    messages.push({
+      role: 'system',
+      content: `Eres un asistente virtual amigable y servicial del campus Tecsup Lima. Tu nombre es "Tecsup Assistant".
 
 TU PERSONALIDAD:
 - Eres amable, conversacional y natural
@@ -204,31 +218,31 @@ IMPORTANTE AL DAR DIRECCIONES:
 - Cuando el usuario CONFIRME que quiere ayuda para llegar, responde: "Perfecto, te llevaré a [LUGAR EXACTO]. Iniciando navegación..."
 - NO des instrucciones manuales, el sistema iniciará la navegación automática
 - Sé específico con el lugar exacto (ejemplo: "SS.HH. Segundo Piso - Pabellón 4")`,
-  });
+    });
 
-  // 🔥 Historial de conversación (últimos 10 mensajes en lugar de 5)
-  const recentHistory = history.slice(-10);
-  recentHistory.forEach(entry => {
-    messages.push(
-      { role: 'user', content: entry.query },
-      { role: 'assistant', content: entry.response },
-    );
-  });
+    // 🔥 Historial de conversación (últimos 10 mensajes)
+    const recentHistory = history.slice(-10);
+    recentHistory.forEach(entry => {
+      messages.push(
+        { role: 'user', content: entry.query },
+        { role: 'assistant', content: entry.response },
+      );
+    });
 
-  // Contexto adicional (ubicación actual)
-  let userMessage = userQuery;
-  if (context?.currentLocation) {
-    userMessage += `\n\n[Contexto: El usuario está actualmente en lat: ${context.currentLocation.lat}, lng: ${context.currentLocation.lng}]`;
+    // Contexto adicional (ubicación actual)
+    let userMessage = userQuery;
+    if (context?.currentLocation) {
+      userMessage += `\n\n[Contexto: El usuario está actualmente en lat: ${context.currentLocation.lat}, lng: ${context.currentLocation.lng}]`;
+    }
+
+    // Mensaje actual del usuario
+    messages.push({
+      role: 'user',
+      content: userMessage,
+    });
+
+    return messages;
   }
-
-  // Mensaje actual del usuario
-  messages.push({
-    role: 'user',
-    content: userMessage,
-  });
-
-  return messages;
-}
 
   /**
    * Analizar respuesta de la IA para extraer intención
@@ -245,7 +259,6 @@ IMPORTANTE AL DAR DIRECCIONES:
     const lowerQuery = userQuery.toLowerCase();
     const lowerResponse = aiResponse.toLowerCase();
 
-    
     // 🔥 Detectar confirmación de ayuda
     if (/(sí|si|claro|por favor|necesito|ayuda|llévame|quiero ir)/i.test(lowerQuery) &&
         /iniciar|navegación|llevar|guiar/i.test(lowerResponse)) {
@@ -255,9 +268,9 @@ IMPORTANTE AL DAR DIRECCIONES:
         action: 'navigate',
       };
     }
-    // Detectar intención basada en el query y la respuesta
+
+    // Detectar intención basada en el query
     if (/(llévame|ir a|cómo llego|navegar|quiero ir)/i.test(lowerQuery)) {
-      // Extraer nombre del lugar mencionado en la respuesta
       const placeMatch = await this.extractPlaceFromResponse(aiResponse);
       return {
         intent: 'navigate',
