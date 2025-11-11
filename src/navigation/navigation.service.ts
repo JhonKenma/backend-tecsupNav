@@ -66,7 +66,7 @@ export class NavigationService {
 
   constructor(
     private googleMapsService: GoogleMapsService,
-    private placesCache: PlacesCacheService, // 🔥 CAMBIO: Usar PlacesCacheService
+    private placesCache: PlacesCacheService,
     private customRoutesService: CustomRoutesService,
   ) {}
 
@@ -74,23 +74,43 @@ export class NavigationService {
    * Obtener todos los lugares
    */
   async getAllPlaces(): Promise<any[]> {
-    return await this.placesCache.getAll(); // 🔥 Usar caché
+    return await this.placesCache.getAll();
   }
 
   /**
-   * Buscar lugares (SIMPLIFICADO)
+   * Validar GPS
+   */
+  async validateGPSLocation(location: Coordinates): Promise<{ valid: boolean; message: string }> {
+    if (!location.lat || !location.lng) {
+      return {
+        valid: false,
+        message: 'GPS no activado. Por favor, activa la ubicación en tu dispositivo.',
+      };
+    }
+
+    try {
+      const isValid = await this.googleMapsService.validateCampusCoordinates(location);
+      return {
+        valid: isValid,
+        message: isValid 
+          ? 'Ubicación GPS válida dentro del campus.' 
+          : 'Tu ubicación está fuera del campus de Tecsup. Asegúrate de estar dentro de las instalaciones.',
+      };
+    } catch {
+      return { valid: true, message: 'Ubicación GPS válida dentro del campus.' };
+    }
+  }
+
+  /**
+   * Buscar lugares
    */
   async searchPlaces(request: SearchRequest): Promise<PlaceWithDistance[]> {
     const { query, currentLocation, maxResults = 10, radius = 1000 } = request;
 
     try {
-      // 🔥 Buscar desde caché en lugar de BD
       const places = await this.placesCache.search(query || '');
-      
-      // Calcular distancias
       let result = places.map(place => this.addDistance(place, currentLocation));
 
-      // Filtrar por radio
       if (currentLocation) {
         result = result
           .filter(p => p.distancia <= radius)
@@ -105,29 +125,7 @@ export class NavigationService {
   }
 
   /**
-   * Validar GPS
-   */
-  async validateGPSLocation(location: Coordinates): Promise<{ valid: boolean; message: string }> {
-    if (!location.lat || !location.lng) {
-      return {
-        valid: false,
-        message: 'GPS no activado. Por favor, activa la ubicación.',
-      };
-    }
-
-    try {
-      const isValid = await this.googleMapsService.validateCampusCoordinates(location);
-      return {
-        valid: isValid,
-        message: isValid ? 'Ubicación GPS válida.' : 'Fuera del campus.',
-      };
-    } catch {
-      return { valid: true, message: 'GPS aceptado.' };
-    }
-  }
-
-  /**
-   * Crear ruta (SIMPLIFICADO)
+   * 🔥 Crear ruta COMPLETA (con rutas personalizadas e instrucciones detalladas)
    */
   async createRouteFromCurrentLocation(request: NavigationRequest): Promise<NavigationResponse> {
     const { currentLocation, destinationId, destinationName, preferences = {} } = request;
@@ -138,30 +136,116 @@ export class NavigationService {
       throw new BadRequestException(gpsValidation.message);
     }
 
-    // 🔥 Encontrar destino desde caché
-    const destination = destinationId
-      ? await this.placesCache.findById(destinationId)
-      : await this.findByName(destinationName!);
+    // Encontrar destino desde caché
+    let destination;
+    if (destinationId) {
+      destination = await this.placesCache.findById(destinationId);
+    } else if (destinationName) {
+      destination = await this.findByName(destinationName);
+    }
 
     if (!destination) {
       throw new NotFoundException('Destino no encontrado');
     }
 
-    // Calcular ruta
-    const route = await this.calculateRoute(currentLocation, destination, preferences);
-    
+    // 🔥 Buscar si existe una ruta personalizada desde un lugar cercano
+    const nearbyPlace = await this.findNearestPlace(currentLocation);
+    let customRoute: any = null;
+
+    if (nearbyPlace && nearbyPlace.distancia < 50) {
+      try {
+        customRoute = await this.customRoutesService.findFastestRoute(
+          nearbyPlace.id,
+          destination.id
+        );
+      } catch (error) {
+        this.logger.debug('No custom route found, using Google Maps');
+        customRoute = null;
+      }
+    }
+
+    let routeInfo;
+    let instructions: string[] = [];
+
+    // 🔥 Si hay ruta personalizada, usarla
+    if (customRoute && !customRoute.isReversed) {
+      routeInfo = {
+        puntos: [
+          currentLocation,
+          ...(Array.isArray(customRoute.puntos) ? customRoute.puntos as Coordinates[] : []),
+        ],
+        distancia: customRoute.distancia || 0,
+        tiempoEstimado: customRoute.tiempoEstimado || 0,
+        dificultad: customRoute.dificultad,
+        accesible: customRoute.accesible || false,
+      };
+
+      instructions = this.generateCustomInstructions(customRoute, nearbyPlace, destination);
+    } else {
+      // Calcular ruta con Google Maps
+      try {
+        const googleRoute = await this.googleMapsService.calculateRoute({
+          origen: currentLocation,
+          destino: { lat: destination.latitud, lng: destination.longitud },
+          modo: preferences.mode || 'walking',
+          optimizar: true,
+        });
+
+        routeInfo = {
+          puntos: googleRoute.puntos,
+          distancia: googleRoute.distancia,
+          tiempoEstimado: googleRoute.tiempoEstimado,
+          accesible: preferences.accessible || false,
+        };
+
+        instructions = this.generateGoogleInstructions(googleRoute, destination);
+      } catch (error) {
+        // 🔥 Fallback: ruta directa con instrucciones detalladas
+        const directDistance = this.googleMapsService.calculateDirectDistance(
+          currentLocation,
+          { lat: destination.latitud, lng: destination.longitud }
+        );
+
+        routeInfo = {
+          puntos: [
+            currentLocation,
+            { lat: destination.latitud, lng: destination.longitud },
+          ],
+          distancia: directDistance,
+          tiempoEstimado: Math.ceil((directDistance / 1000) * 12),
+          accesible: false,
+        };
+
+        instructions = [
+          'Dirígete hacia el norte desde tu ubicación actual',
+          `Camina aproximadamente ${Math.round(directDistance)}m hacia ${destination.nombre}`,
+          `Llegarás a ${destination.nombre} en aproximadamente ${Math.ceil(directDistance / 83.33)} minutos`,
+        ];
+      }
+    }
+
+    this.logger.log(`Navigation created: ${routeInfo.distancia}m to ${destination.nombre}`);
+
     return {
-      route,
-      destination: this.formatDestination(destination),
-      instructions: this.generateInstructions(route, destination),
+      route: routeInfo,
+      destination: {
+        id: destination.id,
+        nombre: destination.nombre,
+        latitud: destination.latitud,
+        longitud: destination.longitud,
+        tipo: destination.tipo?.nombre || 'Lugar',
+        edificio: destination.edificio,
+        piso: destination.piso,
+      },
+      instructions,
     };
   }
 
   /**
-   * Buscar lugares cercanos (SIMPLIFICADO)
+   * Buscar lugares cercanos
    */
   async findNearbyPlaces(location: Coordinates, radius: number = 50): Promise<PlaceWithDistance[]> {
-    const allPlaces = await this.placesCache.getAll(); // 🔥 Usar caché
+    const allPlaces = await this.placesCache.getAll();
     
     return allPlaces
       .map(place => this.addDistance(place, location))
@@ -170,28 +254,30 @@ export class NavigationService {
   }
 
   /**
-   * Actualización de navegación (SIMPLIFICADO)
+   * Actualización de navegación
    */
   async getNavigationUpdate(currentLocation: Coordinates, destinationId: string) {
-    const destination = await this.placesCache.findById(destinationId); // 🔥 Usar caché
+    const destination = await this.placesCache.findById(destinationId);
     if (!destination) throw new NotFoundException('Destino no encontrado');
 
-    const distancia = this.googleMapsService.calculateDirectDistance(
+    const distanciaRestante = this.googleMapsService.calculateDirectDistance(
       currentLocation,
       { lat: destination.latitud, lng: destination.longitud }
     );
 
+    const tiempoRestante = Math.ceil(distanciaRestante / 83.33);
+
     return {
-      distanciaRestante: Math.round(distancia),
-      tiempoRestante: Math.ceil(distancia / 83.33),
-      llegada: distancia < 10,
-      mensaje: distancia < 10 
-        ? `¡Llegaste a ${destination.nombre}!`
-        : `Faltan ${Math.round(distancia)}m`,
+      distanciaRestante: Math.round(distanciaRestante),
+      tiempoRestante,
+      llegada: distanciaRestante < 10,
+      mensaje: distanciaRestante < 10 
+        ? `¡Has llegado a ${destination.nombre}!`
+        : `Te faltan ${Math.round(distanciaRestante)}m para llegar a ${destination.nombre}`,
     };
   }
 
-  // 🔥 MÉTODOS PRIVADOS SIMPLIFICADOS
+  // 🔥 MÉTODOS PRIVADOS
 
   private addDistance(place: any, location?: Coordinates): PlaceWithDistance {
     const distancia = location 
@@ -224,55 +310,113 @@ export class NavigationService {
     return places[0] || null;
   }
 
-  private async calculateRoute(origin: Coordinates, destination: any, prefs: any) {
-    try {
-      const googleRoute = await this.googleMapsService.calculateRoute({
-        origen: origin,
-        destino: { lat: destination.latitud, lng: destination.longitud },
-        modo: prefs.mode || 'walking',
-        optimizar: true,
-      });
+  private async findNearestPlace(location: Coordinates) {
+    const nearbyPlaces = await this.findNearbyPlaces(location, 100);
+    return nearbyPlaces.length > 0 ? nearbyPlaces[0] : null;
+  }
 
-      return {
-        puntos: googleRoute.puntos,
-        distancia: googleRoute.distancia,
-        tiempoEstimado: googleRoute.tiempoEstimado,
-        accesible: prefs.accessible || false,
-      };
-    } catch {
-      // Fallback directo
-      const distancia = this.googleMapsService.calculateDirectDistance(
-        origin,
-        { lat: destination.latitud, lng: destination.longitud }
-      );
+  /**
+   * 🔥 Generar instrucciones para rutas personalizadas (COMPLETO)
+   */
+  private generateCustomInstructions(customRoute: any, nearbyPlace: any, destination: any): string[] {
+    const instructions = [
+      `Desde tu ubicación actual, dirígete hacia ${nearbyPlace?.nombre || 'el punto de inicio'}`,
+    ];
 
-      return {
-        puntos: [origin, { lat: destination.latitud, lng: destination.longitud }],
-        distancia,
-        tiempoEstimado: Math.ceil((distancia / 1000) * 12),
-        accesible: false,
-      };
+    if (customRoute.notas) {
+      instructions.push(`Nota importante: ${customRoute.notas}`);
     }
+
+    if (customRoute.accesible) {
+      instructions.push('Esta ruta es accesible para personas con discapacidad');
+    }
+
+    if (customRoute.dificultad) {
+      const dificultadTexto = {
+        facil: 'Ruta fácil de seguir',
+        medio: 'Ruta de dificultad media',
+        dificil: 'Ruta que requiere atención extra',
+      };
+      instructions.push(dificultadTexto[customRoute.dificultad] || '');
+    }
+
+    instructions.push(
+      `Sigue la ruta marcada hasta llegar a ${destination.nombre}`,
+      `Tiempo estimado: ${customRoute.tiempoEstimado} minutos`,
+      `Distancia: ${Math.round(customRoute.distancia)}m`,
+    );
+
+    return instructions.filter(Boolean);
   }
 
-  private formatDestination(destination: any) {
-    return {
-      id: destination.id,
-      nombre: destination.nombre,
-      latitud: destination.latitud,
-      longitud: destination.longitud,
-      tipo: destination.tipo?.nombre || 'Lugar',
-      edificio: destination.edificio,
-      piso: destination.piso,
-    };
-  }
-
-  private generateInstructions(route: any, destination: any): string[] {
+  /**
+   * 🔥 Generar instrucciones para rutas de Google Maps (COMPLETO)
+   */
+  private generateGoogleInstructions(googleRoute: any, destination: any): string[] {
     return [
-      'Sigue la ruta calculada',
-      `Dirígete a ${destination.nombre}`,
-      `Tiempo: ${route.tiempoEstimado} min`,
-      `Distancia: ${Math.round(route.distancia)}m`,
+      'Sigue la ruta calculada automáticamente',
+      `Dirígete hacia ${destination.nombre}`,
+      `Tiempo estimado: ${googleRoute.tiempoEstimado} minutos`,
+      `Distancia: ${Math.round(googleRoute.distancia)}m`,
+      'Mantén activo el GPS para navegación en tiempo real',
     ];
   }
-}
+
+    /**
+   * 🔥 Generar instrucciones detalladas según el tipo de ruta
+   */
+  private generateInstructions(route: any, destination: any): string[] {
+    // Si es una ruta de Google Maps con puntos
+    if (route.puntos && route.puntos.length > 2) {
+      return [
+        'Sigue la ruta calculada automáticamente',
+        `Dirígete hacia ${destination.nombre}`,
+        `Tiempo estimado: ${route.tiempoEstimado} minutos`,
+        `Distancia: ${Math.round(route.distancia)}m`,
+        'Mantén activo el GPS para navegación en tiempo real',
+      ];
+    }
+
+    // Si es una ruta directa (fallback) - generar instrucciones con dirección
+    const origin = route.puntos[0];
+    const dest = route.puntos[route.puntos.length - 1];
+    
+    // Calcular dirección cardinal
+    const direction = this.calculateDirection(origin, dest);
+    
+    return [
+      `Dirígete hacia el ${direction} desde tu ubicación actual`,
+      `Camina aproximadamente ${Math.round(route.distancia)}m hacia ${destination.nombre}`,
+      `Tiempo estimado: ${route.tiempoEstimado} minutos`,
+      destination.edificio ? `Ubicado en ${destination.edificio}` : '',
+      destination.piso ? `Piso ${destination.piso}` : '',
+      `Llegarás a ${destination.nombre} en aproximadamente ${Math.ceil(route.distancia / 83.33)} minutos`,
+    ].filter(Boolean);
+  }
+
+  /**
+   * 🔥 NUEVO: Calcular dirección cardinal entre dos puntos
+   */
+  private calculateDirection(origin: Coordinates, destination: Coordinates): string {
+    const latDiff = destination.lat - origin.lat;
+    const lngDiff = destination.lng - origin.lng;
+
+    // Calcular ángulo en grados
+    let angle = Math.atan2(lngDiff, latDiff) * (180 / Math.PI);
+    
+    // Normalizar a 0-360
+    if (angle < 0) angle += 360;
+
+    // Determinar dirección cardinal
+    if (angle >= 337.5 || angle < 22.5) return 'norte';
+    if (angle >= 22.5 && angle < 67.5) return 'noreste';
+    if (angle >= 67.5 && angle < 112.5) return 'este';
+    if (angle >= 112.5 && angle < 157.5) return 'sureste';
+    if (angle >= 157.5 && angle < 202.5) return 'sur';
+    if (angle >= 202.5 && angle < 247.5) return 'suroeste';
+    if (angle >= 247.5 && angle < 292.5) return 'oeste';
+    if (angle >= 292.5 && angle < 337.5) return 'noroeste';
+    
+    return 'norte'; // fallback
+  }
+}  // ← Cierra la clase aquí
