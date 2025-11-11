@@ -13,6 +13,7 @@ import { CustomRoutesModule } from './custom-routes/custom-routes.module';
 import { NavigationModule } from './navigation/navigation.module';
 import { AIAssistantModule } from './ai-assistant/ai-assistant.module';
 import { StorageModule } from './storage/storage.module'; // ✅ AÑADIR ESTA LÍNEA
+import { CacheModule } from './common/cache/cache.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -20,6 +21,7 @@ import { AppService } from './app.service';
   imports: [
     // ✅ Configuración global
     ConfigModule,
+    CacheModule, 
 
     // ✅ Rate limiting (con estrategias múltiples)
     ThrottlerModule.forRoot([
