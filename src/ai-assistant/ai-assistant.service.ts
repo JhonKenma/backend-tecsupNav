@@ -54,7 +54,7 @@ export class AIAssistantService {
 // src/ai-assistant/ai-assistant.service.ts
 
 /**
- * Procesar con IA conversacional (MODO INTELIGENTE)
+ * Procesar con IA conversacional (MODO INTELIGENTE + MEJORADO)
  */
 private async processWithConversationalAI(
   userId: string,
@@ -62,48 +62,35 @@ private async processWithConversationalAI(
   context?: CommandContext,
 ): Promise<AssistantResponse> {
   try {
-    // 🔥 Obtener historial reciente (aumentado de 5 a 10 para mejor contexto)
     const history = this.conversationHistory.getHistory(userId, 10);
-
-    // Obtener respuesta de la IA conversacional
-    const aiResult = await this.conversationalAI.getConversationalResponse(
-      query,
-      history,
-      context,
-    );
-
-    // 🔥 Detectar si el usuario está confirmando una acción del mensaje anterior
+    const aiResult = await this.conversationalAI.getConversationalResponse(query, history, context);
+    
     const lastMessage = history.length > 0 ? history[history.length - 1] : null;
     const isConfirmingNavigation = 
       lastMessage && 
       /(si necesitas ayuda|solo dime|puedo ayudarte a llegar)/i.test(lastMessage.response) &&
       /(sí|si|claro|por favor|necesito|ayuda)/i.test(query.toLowerCase());
 
-    // 🔥 Si está confirmando navegación, extraer lugar del mensaje anterior
     let destination: string | undefined = undefined;
     if (isConfirmingNavigation && lastMessage) {
       destination = await this.extractPlaceFromMessage(lastMessage.response);
     }
 
-    // Si no encontró destino por confirmación, usar detección normal
     if (!destination) {
-      // 🔥 Detectar intención con reglas para extraer entidades
       const ruleIntent = this.intentDetection.detectWithRules(query);
       destination = ruleIntent.entities?.destination || aiResult.data?.destination;
     }
 
-    // 🔥 Determinar la intención final
     const ruleIntent = this.intentDetection.detectWithRules(query);
     const finalIntent = isConfirmingNavigation 
       ? 'navigate' 
       : (aiResult.confidence > ruleIntent.confidence ? aiResult.intent : ruleIntent.intent);
 
-    // 🔥 EJECUTAR ACCIÓN SEGÚN INTENCIÓN
     let actionData: any = null;
     let finalMessage = aiResult.message;
     let finalAction = aiResult.suggestedAction || 'none';
 
-    // 🔥 Si encontró lugar por confirmación, forzar navegación INMEDIATAMENTE
+    // 🔥 CONFIRMACIÓN DE NAVEGACIÓN
     if (isConfirmingNavigation && destination) {
       const places = await this.commandHandler['navigationService'].searchPlaces({
         query: destination,
@@ -117,7 +104,6 @@ private async processWithConversationalAI(
           ? `Está a ${Math.round(place.distancia)}m de tu ubicación (${place.tiempoEstimadoCaminando} min caminando).`
           : '';
 
-        // Guardar interacción ANTES de retornar
         this.conversationHistory.saveInteraction(
           userId,
           query,
@@ -135,16 +121,12 @@ private async processWithConversationalAI(
             interpretation: 'Confirmación de navegación',
           },
           action: 'navigate',
-          data: {
-            places: places,  // ✅ CAMBIO: Siempre array
-            //placeId: place.id,
-            //place: place,
-          },
+          data: { places: places },
         };
       }
     }
 
-    // Si es navegación (no confirmación), SIEMPRE buscar el lugar
+    // 🔥 NAVEGACIÓN
     if (finalIntent === 'navigate' && destination) {
       const places = await this.commandHandler['navigationService'].searchPlaces({
         query: destination,
@@ -153,36 +135,21 @@ private async processWithConversationalAI(
       });
 
       if (places.length === 1) {
-        // ✅ UN SOLO RESULTADO: Navegar directamente
         const place = places[0];
         const distanceInfo = place.distancia > 0 
           ? `Está a ${Math.round(place.distancia)}m de tu ubicación (${place.tiempoEstimadoCaminando} min caminando).`
           : '';
 
-        actionData = {
-          places: places,  // ✅ CAMBIO: Array con 1 elemento
-          //placeId: place.id,
-          //place: place,
-        };
-
+        actionData = { places: places };
         finalMessage = `Perfecto, te llevaré a ${place.nombre}. ${distanceInfo}`;
         finalAction = 'navigate';
 
       } else if (places.length > 1) {
-        // 🔀 MÚLTIPLES RESULTADOS: Pedir confirmación
-        actionData = { 
-          places: places  // ✅ CAMBIO: Siempre array
-        };
+        actionData = { places: places };
         finalMessage = `Encontré ${places.length} lugares con "${destination}". ¿A cuál quieres ir?`;
         finalAction = 'none';
 
-        // Guardar interacción
-        this.conversationHistory.saveInteraction(
-          userId,
-          query,
-          finalMessage,
-          finalIntent,
-        );
+        this.conversationHistory.saveInteraction(userId, query, finalMessage, finalIntent);
 
         return {
           message: finalMessage,
@@ -202,14 +169,21 @@ private async processWithConversationalAI(
             description: this.buildPlaceDescription(place),
           })),
         };
-
       } else {
-        // ❌ NO SE ENCONTRÓ: Usar mensaje de la IA
+        // 🔥 NO ENCONTRÓ - DAR TIPS
+        finalMessage = `No encontré "${destination}". 
+
+💡 **Tips para navegar:**
+- Di el nombre completo: "Llévame al Laboratorio 802"
+- Usa frases claras: "Quiero ir al aula 400"
+- Menciona el edificio: "Ir al pabellón 4"
+
+¿Quieres que busque lugares similares?`;
         finalAction = 'none';
       }
     }
 
-    // Si es búsqueda, ejecutar búsqueda
+    // 🔥 BÚSQUEDA
     if (finalIntent === 'search' && destination) {
       const places = await this.commandHandler['navigationService'].searchPlaces({
         query: destination,
@@ -218,15 +192,28 @@ private async processWithConversationalAI(
       });
 
       if (places.length > 0) {
-        actionData = { 
-          places: places  // ✅ CAMBIO: Siempre array
-         };
-        finalMessage = `Encontré ${places.length} lugares relacionados con "${destination}":`;
+        actionData = { places: places };
+        
+        // 🔥 Agregar tip al mensaje de la IA
+        if (!finalMessage.includes('necesitas ayuda') && !finalMessage.includes('quieres ir')) {
+          finalMessage += '\n\n💡 Tip: Para navegar a uno de ellos, di "Llévame a [nombre exacto]" o "Quiero ir a [nombre]".';
+        }
+        
         finalAction = 'search';
+      } else {
+        // 🔥 NO ENCONTRÓ - DAR TIPS
+        finalMessage = `No encontré lugares con "${destination}". 
+
+💡 **Sugerencias para mejorar tu búsqueda:**
+- Usa palabras clave: "Buscar laboratorios", "Mostrar aulas"
+- Sé específico: "Laboratorio 802" en lugar de "lab"
+- Menciona el pabellón: "Aulas en pabellón 4"
+
+Ejemplo: "Buscar laboratorios en pabellón 8"`;
+        finalAction = 'none';
       }
     }
 
-    // Crear respuesta final
     const response: AssistantResponse = {
       message: finalMessage,
       intent: {
@@ -240,19 +227,11 @@ private async processWithConversationalAI(
       data: actionData,
     };
 
-    // Guardar interacción en historial
-    this.conversationHistory.saveInteraction(
-      userId,
-      query,
-      finalMessage,
-      finalIntent,
-    );
-
+    this.conversationHistory.saveInteraction(userId, query, finalMessage, finalIntent);
     return response;
 
   } catch (error) {
     this.logger.error(`Conversational AI error: ${error.message}`);
-    // Fallback a reglas
     return await this.processWithRules(userId, query, context);
   }
 }
