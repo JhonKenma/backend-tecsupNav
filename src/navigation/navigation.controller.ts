@@ -24,7 +24,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller('navigation')
-//@UseGuards(JwtAuthGuard, MobileOnlyGuard) // Solo estudiantes desde móvil
+@UseGuards(JwtAuthGuard, MobileOnlyGuard) // Solo estudiantes desde móvil
 export class NavigationController {
   constructor(private readonly navigationService: NavigationService) {}
 
