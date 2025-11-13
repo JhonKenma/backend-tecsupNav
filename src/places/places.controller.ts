@@ -136,6 +136,24 @@ export class PlacesController {
     }
   }
 
+  
+  @Get('findAll_mobile')
+  async findAll_mobile(@Query() searchDto: SearchPlacesDto) {
+    try {
+      const result = await this.placesService.findAll(searchDto);
+      return {
+        success: true,
+        data: result.places,
+        pagination: result.pagination,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
   @Get('search')
   async searchByText(@Query('q') query: string) {
     try {
