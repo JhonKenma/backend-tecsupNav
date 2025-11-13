@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -78,6 +79,32 @@ async function bootstrap() {
   console.log(`🌍 Environment: ${nodeEnv}`);
   console.log(`📚 API Documentation: /api/docs`);
   console.log(`📱 Health check: /api/health`);
+
+  // ✅ SINGLETON: Cierre controlado en señales de sistema
+  process.on('SIGINT', async () => {
+    console.log('📥 Received SIGINT, closing Prisma connection...');
+    await PrismaService.closeConnection();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    console.log('📥 Received SIGTERM, closing Prisma connection...');
+    await PrismaService.closeConnection();
+    process.exit(0);
+  });
+
+  // ✅ SINGLETON: Manejo de errores no capturados
+  process.on('uncaughtException', async (error) => {
+    console.error('💥 Uncaught Exception:', error);
+    await PrismaService.closeConnection();
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', async (reason) => {
+    console.error('💥 Unhandled Rejection:', reason);
+    await PrismaService.closeConnection();
+    process.exit(1);
+  });
 }
 
 bootstrap();

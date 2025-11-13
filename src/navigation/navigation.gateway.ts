@@ -32,10 +32,13 @@ interface LocationUpdate {
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // Configurar según tu dominio en producción
+    origin: '*',
     credentials: true,
   },
   namespace: '/navigation',
+  // ✅ NUEVO: Configuración de limpieza
+  pingTimeout: 30000,
+  pingInterval: 25000,
 })
 export class NavigationGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -44,11 +47,46 @@ export class NavigationGateway implements OnGatewayConnection, OnGatewayDisconne
   private readonly logger = new Logger(NavigationGateway.name);
   private activeSessions = new Map<string, NavigationSession>();
   private clientSockets = new Map<string, Socket>();
+  
+  // ✅ NUEVO: Limpieza automática
+  private cleanupInterval: NodeJS.Timeout;
 
   constructor(
     private navigationService: NavigationService,
     private jwtService: JwtService,
-  ) {}
+  ) {
+    // ✅ NUEVO: Iniciar limpieza automática cada 5 minutos
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupInactiveSessions();
+    }, 5 * 60 * 1000);
+  }
+
+  // ✅ NUEVO: Método de limpieza
+  private cleanupInactiveSessions() {
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const [userId, session] of this.activeSessions.entries()) {
+      // Limpiar sesiones inactivas por más de 30 minutos
+      const sessionAge = now - session.startTime.getTime();
+      if (sessionAge > 30 * 60 * 1000 || !session.isActive) {
+        this.activeSessions.delete(userId);
+        cleaned++;
+      }
+    }
+
+    // Limpiar sockets desconectados
+    for (const [userId, socket] of this.clientSockets.entries()) {
+      if (socket.disconnected) {
+        this.clientSockets.delete(userId);
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      this.logger.log(`🧹 Cleaned up ${cleaned} inactive sessions/sockets`);
+    }
+  }
 
   // Conexión de cliente
   async handleConnection(client: Socket) {
@@ -105,7 +143,17 @@ export class NavigationGateway implements OnGatewayConnection, OnGatewayDisconne
   handleDisconnect(client: Socket) {
     const userId = client.data.userId;
     if (userId) {
+      // Limpiar inmediatamente
       this.clientSockets.delete(userId);
+      const session = this.activeSessions.get(userId);
+      if (session) {
+        session.isActive = false;
+        // Mantener por 5 minutos en caso de reconexión
+        setTimeout(() => {
+          this.activeSessions.delete(userId);
+        }, 5 * 60 * 1000);
+      }
+      
       this.logger.log(`Student ${userId} disconnected from navigation (${client.id})`);
     }
   }
@@ -433,5 +481,12 @@ export class NavigationGateway implements OnGatewayConnection, OnGatewayDisconne
 
   public getActiveSessions(): Map<string, NavigationSession> {
     return this.activeSessions;
+  }
+
+  // ✅ NUEVO: Destructor para limpiar interval
+  onModuleDestroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
   }
 }

@@ -4,7 +4,15 @@ import { PrismaService } from './prisma.service';
 
 @Global()
 @Module({
-  providers: [PrismaService],
+  providers: [
+    {
+      provide: PrismaService,
+      useFactory: () => {
+        // ✅ SINGLETON: Usar factory method para control explícito
+        return PrismaService.getInstance();
+      },
+    },
+  ],
   exports: [PrismaService],
 })
 export class PrismaModule {}
