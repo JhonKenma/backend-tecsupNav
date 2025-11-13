@@ -14,15 +14,22 @@ export class ConversationalAIService {
   private readonly logger = new Logger(ConversationalAIService.name);
   private openai: OpenAI | null = null;
   private isConfigured = false;
-  private placesContext: string = '';
+  // 🔥 CAMBIO: Contexto mínimo por defecto
+  private placesContext: string = `=== CAMPUS TECSUP LIMA ===
+Lugares principales: Aulas, Laboratorios, Oficinas, Baños, Polideportivo.
+Pregunta por lugares específicos para más información.`;
   private lastContextUpdate: Date | null = null;
+  private isLoadingContext = false; // 🔥 NUEVO: Flag para evitar cargas múltiples
 
   constructor(
     private configService: ConfigService,
     private navigationService: NavigationService,
   ) {
     this.initializeOpenAI();
-    this.loadPlacesContext();
+    // 🔥 CAMBIO: Cargar contexto de forma asíncrona (no bloquea)
+    this.loadPlacesContext().catch(err => {
+      this.logger.warn('Initial context load failed, using minimal context');
+    });
   }
 
   private initializeOpenAI() {
@@ -45,17 +52,28 @@ export class ConversationalAIService {
   }
 
   /**
-   * 🔥 Cargar contexto con timeout y retry
+   * 🔥 Cargar contexto con timeout largo y sin bloquear
    */
   private async loadPlacesContext() {
+    if (this.isLoadingContext) {
+      this.logger.debug('Context already loading, skipping...');
+      return;
+    }
+
+    this.isLoadingContext = true;
+
     try {
-      // Timeout de 5 segundos
+      // 🔥 CAMBIO: Timeout de 15 segundos (antes 5s)
       const places = await Promise.race([
         this.navigationService.getAllPlaces(),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 5000)
+          setTimeout(() => reject(new Error('Timeout after 15s')), 15000)
         ),
       ]) as any[];
+
+      if (!places || places.length === 0) {
+        throw new Error('No places loaded');
+      }
 
       // Agrupar por tipo
       const grouped = places.reduce((acc, place) => {
@@ -65,13 +83,13 @@ export class ConversationalAIService {
         return acc;
       }, {});
 
-      // Construir contexto legible (limitado)
-      let context = '=== LUGARES DEL CAMPUS TECSUP ===\n\n';
+      // Construir contexto (más compacto)
+      let context = '=== CAMPUS TECSUP LIMA ===\n\n';
 
       for (const [tipo, lugares] of Object.entries(grouped)) {
         context += `${tipo.toUpperCase()}S:\n`;
-        // 🔥 Limitar a 20 lugares por tipo para no sobrecargar
-        (lugares as any[]).slice(0, 20).forEach(lugar => {
+        // 🔥 CAMBIO: Limitar a 15 lugares por tipo (antes 20)
+        (lugares as any[]).slice(0, 15).forEach(lugar => {
           context += `- ${lugar.nombre}`;
           if (lugar.edificio) context += ` (${lugar.edificio}`;
           if (lugar.piso) context += `, piso ${lugar.piso}`;
@@ -81,11 +99,11 @@ export class ConversationalAIService {
         context += '\n';
       }
 
-      // Agregar información adicional
+      // Pabellones (limitado)
       const edificios = [...new Set(places.filter(p => p.edificio).map(p => p.edificio))];
       if (edificios.length > 0) {
         context += 'PABELLONES:\n';
-        edificios.forEach(e => context += `- ${e}\n`);
+        edificios.slice(0, 10).forEach(e => context += `- ${e}\n`);
         context += '\n';
       }
 
@@ -95,25 +113,32 @@ export class ConversationalAIService {
       this.logger.log(`✅ Contexto cargado: ${places.length} lugares`);
     } catch (error) {
       this.logger.error(`Error loading context: ${error.message}`);
-      // 🔥 Usar contexto vacío como fallback
-      this.placesContext = 'Información del campus temporalmente no disponible.';
+      // 🔥 CAMBIO: Mantener contexto mínimo si falla
+      if (!this.lastContextUpdate) {
+        this.placesContext = `=== CAMPUS TECSUP LIMA ===
+Lugares principales: Aulas, Laboratorios, Oficinas, Baños, Polideportivo.
+Pregunta por lugares específicos para obtener más información.`;
+        this.lastContextUpdate = new Date();
+      }
+    } finally {
+      this.isLoadingContext = false;
     }
   }
 
   /**
-   * 🔥 Refrescar contexto solo si es necesario (10 minutos)
+   * 🔥 Refrescar contexto solo si es necesario (15 minutos)
    */
   private async refreshContextIfNeeded() {
-    const tenMinutes = 10 * 60 * 1000; // Aumentado de 5 a 10 minutos
+    const fifteenMinutes = 15 * 60 * 1000; // 🔥 CAMBIO: Aumentado de 10 a 15 min
     if (!this.lastContextUpdate || 
-        Date.now() - this.lastContextUpdate.getTime() > tenMinutes) {
-      await this.loadPlacesContext();
+        Date.now() - this.lastContextUpdate.getTime() > fifteenMinutes) {
+      // 🔥 CAMBIO: No esperar la carga, hacerlo en background
+      this.loadPlacesContext().catch(err => {
+        this.logger.warn('Background context refresh failed');
+      });
     }
   }
 
-  /**
-   * Verificar disponibilidad
-   */
   isAvailable(): boolean {
     return this.isConfigured && this.openai !== null;
   }
@@ -136,7 +161,8 @@ export class ConversationalAIService {
       throw new Error('Conversational AI is not available');
     }
 
-    await this.refreshContextIfNeeded();
+    // 🔥 CAMBIO: Refrescar contexto en background si es necesario
+    this.refreshContextIfNeeded();
 
     const messages = this.buildConversation(userQuery, conversationHistory, context);
 
@@ -147,7 +173,7 @@ export class ConversationalAIService {
           model: 'gpt-4o-mini',
           messages: messages,
           temperature: 0.7,
-          max_tokens: 500, // 🔥 Reducido de 800
+          max_tokens: 500,
         }),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('OpenAI timeout')), 10000)
@@ -155,8 +181,6 @@ export class ConversationalAIService {
       ]) as any;
 
       const aiResponse = completion.choices[0].message.content || '';
-
-      // Analizar la respuesta
       const analysis = await this.analyzeResponse(userQuery, aiResponse);
 
       return {
@@ -173,9 +197,6 @@ export class ConversationalAIService {
     }
   }
 
-  /**
-   * Construir la conversación completa
-   */
   private buildConversation(
     userQuery: string,
     history: Array<{query: string; response: string}>,
@@ -183,7 +204,6 @@ export class ConversationalAIService {
   ): ChatMessage[] {
     const messages: ChatMessage[] = [];
 
-    // Sistema: Personalidad y conocimiento
     messages.push({
       role: 'system',
       content: `Eres un asistente virtual amigable y servicial del campus Tecsup Lima. Tu nombre es "Tecsup Assistant".
@@ -193,9 +213,8 @@ TU PERSONALIDAD:
 - Hablas en español peruano de forma cercana
 - Usas emojis ocasionalmente para ser más amigable 
 - No eres robótico, eres como un amigo que conoce bien el campus
-- Puedes hacer pequeñas bromas o comentarios amigables
 - Si no sabes algo, lo admites con honestidad
-- 🔥 IMPORTANTE: SIEMPRE recuerdas el contexto de la conversación anterior
+- IMPORTANTE: SIEMPRE recuerdas el contexto de la conversación anterior
 
 TU CONOCIMIENTO:
 ${this.placesContext}
@@ -206,21 +225,15 @@ TUS CAPACIDADES:
 ✅ Dar información detallada sobre ubicaciones
 ✅ Responder preguntas sobre el campus
 ✅ Sugerir rutas y lugares cercanos
-✅ 🔥 MANTENER contexto de conversaciones previas
-
-CÓMO MANEJAS EL CONTEXTO:
-- Si el usuario dice "sí necesito ayuda" o similar, revisa el mensaje anterior
-- Si mencionaste lugares en el mensaje anterior, úsalos en tu respuesta
-- Mantén coherencia con lo que dijiste antes
-- Si el usuario se refiere a "eso", "ahí", "allí", usa el contexto previo
+✅ MANTENER contexto de conversaciones previas
 
 IMPORTANTE AL DAR DIRECCIONES:
-- Cuando el usuario CONFIRME que quiere ayuda para llegar, responde: "Perfecto, te llevaré a [LUGAR EXACTO]. Iniciando navegación..."
+- Cuando el usuario CONFIRME que quiere ayuda, responde: "Perfecto, te llevaré a [LUGAR EXACTO]. Iniciando navegación..."
 - NO des instrucciones manuales, el sistema iniciará la navegación automática
-- Sé específico con el lugar exacto (ejemplo: "SS.HH. Segundo Piso - Pabellón 4")`,
+- Sé específico con el lugar exacto`,
     });
 
-    // 🔥 Historial de conversación (últimos 10 mensajes)
+    // Historial (últimos 10 mensajes)
     const recentHistory = history.slice(-10);
     recentHistory.forEach(entry => {
       messages.push(
@@ -229,13 +242,12 @@ IMPORTANTE AL DAR DIRECCIONES:
       );
     });
 
-    // Contexto adicional (ubicación actual)
+    // Mensaje actual
     let userMessage = userQuery;
     if (context?.currentLocation) {
-      userMessage += `\n\n[Contexto: El usuario está actualmente en lat: ${context.currentLocation.lat}, lng: ${context.currentLocation.lng}]`;
+      userMessage += `\n\n[Usuario en: lat ${context.currentLocation.lat}, lng ${context.currentLocation.lng}]`;
     }
 
-    // Mensaje actual del usuario
     messages.push({
       role: 'user',
       content: userMessage,
@@ -244,9 +256,6 @@ IMPORTANTE AL DAR DIRECCIONES:
     return messages;
   }
 
-  /**
-   * Analizar respuesta de la IA para extraer intención
-   */
   private async analyzeResponse(
     userQuery: string,
     aiResponse: string,
@@ -257,19 +266,12 @@ IMPORTANTE AL DAR DIRECCIONES:
     data?: any;
   }> {
     const lowerQuery = userQuery.toLowerCase();
-    const lowerResponse = aiResponse.toLowerCase();
 
-    // 🔥 Detectar confirmación de ayuda
     if (/(sí|si|claro|por favor|necesito|ayuda|llévame|quiero ir)/i.test(lowerQuery) &&
-        /iniciar|navegación|llevar|guiar/i.test(lowerResponse)) {
-      return {
-        intent: 'navigate',
-        confidence: 0.95,
-        action: 'navigate',
-      };
+        /iniciar|navegación|llevar|guiar/i.test(aiResponse.toLowerCase())) {
+      return { intent: 'navigate', confidence: 0.95, action: 'navigate' };
     }
 
-    // Detectar intención basada en el query
     if (/(llévame|ir a|cómo llego|navegar|quiero ir)/i.test(lowerQuery)) {
       const placeMatch = await this.extractPlaceFromResponse(aiResponse);
       return {
@@ -281,47 +283,24 @@ IMPORTANTE AL DAR DIRECCIONES:
     }
 
     if (/(buscar|mostrar|listar|qué.*hay|cuántos)/i.test(lowerQuery)) {
-      return {
-        intent: 'search',
-        confidence: 0.85,
-        action: 'search',
-      };
+      return { intent: 'search', confidence: 0.85, action: 'search' };
     }
 
     if (/(qué es|información|cuéntame|dime sobre)/i.test(lowerQuery)) {
-      return {
-        intent: 'information',
-        confidence: 0.8,
-        action: 'info',
-      };
+      return { intent: 'information', confidence: 0.8, action: 'info' };
     }
 
     if (/(hola|hey|buenos|buenas)/i.test(lowerQuery)) {
-      return {
-        intent: 'greeting',
-        confidence: 0.95,
-        action: 'none',
-      };
+      return { intent: 'greeting', confidence: 0.95, action: 'none' };
     }
 
     if (/(ayuda|help|qué puedes)/i.test(lowerQuery)) {
-      return {
-        intent: 'help',
-        confidence: 0.9,
-        action: 'none',
-      };
+      return { intent: 'help', confidence: 0.9, action: 'none' };
     }
 
-    return {
-      intent: 'conversation',
-      confidence: 0.7,
-      action: 'none',
-    };
+    return { intent: 'conversation', confidence: 0.7, action: 'none' };
   }
 
-  /**
-   * Extraer nombre de lugar de la respuesta
-   */
   private async extractPlaceFromResponse(response: string): Promise<string | null> {
     try {
       const places = await this.navigationService.searchPlaces({
@@ -329,7 +308,6 @@ IMPORTANTE AL DAR DIRECCIONES:
         maxResults: 1000,
       });
 
-      // Buscar si algún lugar es mencionado en la respuesta
       for (const place of places) {
         if (response.includes(place.nombre)) {
           return place.nombre;
@@ -342,9 +320,6 @@ IMPORTANTE AL DAR DIRECCIONES:
     }
   }
 
-  /**
-   * Forzar recarga del contexto
-   */
   async forceContextReload() {
     await this.loadPlacesContext();
   }
