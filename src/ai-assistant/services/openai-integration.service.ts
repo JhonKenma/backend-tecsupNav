@@ -2,7 +2,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OpenAI } from 'openai';
-import CircuitBreaker from 'opossum';
+import * as CircuitBreaker from 'opossum';
 import { IntentResult } from '../interfaces/intent-result.interface';
 
 @Injectable()
@@ -10,7 +10,7 @@ export class OpenAIIntegrationService {
   private readonly logger = new Logger(OpenAIIntegrationService.name);
   private openai: OpenAI | null = null;
   private isConfigured = false;
-  private circuitBreaker: CircuitBreaker | null = null;
+  private circuitBreaker: any = null;
 
   constructor(private configService: ConfigService) {
     this.initializeOpenAI();
