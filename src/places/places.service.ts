@@ -156,6 +156,73 @@ export class PlacesService {
     };
   }
 
+  async findAll_mobile(searchDto: SearchPlacesDto = {}) {
+    const { nearLat, nearLng, radius = 1000, ...filters } = searchDto;
+
+    // Construir filtros para la búsqueda
+    const where: any = {};
+
+    if (filters.nombre) {
+      where.nombre = {
+        contains: filters.nombre,
+        mode: 'insensitive',
+      };
+    }
+
+    if (filters.tipoId) {
+      where.tipoId = filters.tipoId;
+    }
+
+    if (filters.edificio) {
+      where.edificio = {
+        contains: filters.edificio,
+        mode: 'insensitive',
+      };
+    }
+
+    if (filters.piso !== undefined) {
+      where.piso = filters.piso;
+    }
+
+    if (filters.isActive !== undefined) {
+      where.isActive = filters.isActive;
+    }
+
+    const places = await this.prisma.place.findMany({
+      where,
+      include: {
+        tipo: true,
+        _count: {
+          select: {
+            rutasOrigen: true,
+            rutasDestino: true,
+          },
+        },
+      },
+      orderBy: { nombre: 'asc' },
+    });
+
+    // Si se especificaron coordenadas, filtrar por proximidad y calcular distancias
+    let filteredPlaces = places;
+    if (nearLat && nearLng) {
+      filteredPlaces = places
+        .map(place => ({
+          ...place,
+          distancia: this.googleMapsService.calculateDirectDistance(
+            { lat: nearLat, lng: nearLng },
+            { lat: place.latitud, lng: place.longitud }
+          ),
+        }))
+        .filter(place => place.distancia <= radius)
+        .sort((a, b) => a.distancia - b.distancia);
+    }
+
+    return {
+      places: filteredPlaces,
+      total: filteredPlaces.length,
+    };
+  }
+
   async findOne(id: string) {
     const place = await this.prisma.place.findUnique({
       where: { id },
