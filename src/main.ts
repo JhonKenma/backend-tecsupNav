@@ -24,6 +24,7 @@ async function bootstrap() {
       'https://josephhuayra.online',
       'https://www.josephhuayra.online',
       'https://api.josephhuayra.online',
+      'https://frontend-tecnav-admin.onrender.com',
       configService.get('WEB_URL'),
       configService.get('MOBILE_URL'),
     ].filter(url => url), // Filtrar undefined/null
