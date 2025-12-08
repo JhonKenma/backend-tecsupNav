@@ -130,11 +130,11 @@ export class NavigationService {
   async createRouteFromCurrentLocation(request: NavigationRequest): Promise<NavigationResponse> {
     const { currentLocation, destinationId, destinationName, preferences = {} } = request;
 
-    // Validar GPS
-    const gpsValidation = await this.validateGPSLocation(currentLocation);
-    if (!gpsValidation.valid) {
-      throw new BadRequestException(gpsValidation.message);
-    }
+    // // Validar GPS
+    // const gpsValidation = await this.validateGPSLocation(currentLocation);
+    // if (!gpsValidation.valid) {
+    //   throw new BadRequestException(gpsValidation.message);
+    // }
 
     // Encontrar destino desde caché
     let destination;
