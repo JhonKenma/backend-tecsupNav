@@ -24,6 +24,7 @@ async function bootstrap() {
       'https://josephhuayra.online',
       'https://www.josephhuayra.online',
       'https://api.josephhuayra.online',
+      'https://backend-tecsupnav-fxg2.onrender.com',
       'https://frontend-tecnav-admin.onrender.com',
       'https://tecsupnav.online',
       'https://www.tecsupnav.online',
