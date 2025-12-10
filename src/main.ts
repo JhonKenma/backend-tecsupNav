@@ -28,6 +28,7 @@ async function bootstrap() {
       'https://frontend-tecnav-admin.onrender.com',
       'https://tecsupnav.online',
       'https://www.tecsupnav.online',
+      'https://admin.tecsupnav.online',
       configService.get('WEB_URL'),
       configService.get('MOBILE_URL'),
     ].filter(url => url), // Filtrar undefined/null
