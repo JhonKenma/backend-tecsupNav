@@ -83,4 +83,55 @@ export class UsersService {
       data: { updatedAt: new Date() },
     });
   }
+
+  // NUEVO: Obtener todos los usuarios que se registraron con Google
+  async findGoogleUsers(): Promise<Omit<User, 'password'>[]> {
+    return this.prisma.user.findMany({
+      where: {
+        googleId: {
+          not: null, // Solo usuarios que tienen googleId
+        },
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        googleId: true,
+        avatar: true,
+        createdAt: true,
+        updatedAt: true,
+        password: false, // Excluir password explícitamente
+      },
+      orderBy: {
+        createdAt: 'desc', // Más recientes primero
+      },
+    });
+  }
+
+  // OPCIONAL: Obtener estadísticas de usuarios Google
+  async getGoogleUsersStats() {
+    const total = await this.prisma.user.count({
+      where: {
+        googleId: { not: null },
+      },
+    });
+
+    const active = await this.prisma.user.count({
+      where: {
+        googleId: { not: null },
+        isActive: true,
+      },
+    });
+
+    const inactive = total - active;
+
+    return {
+      total,
+      active,
+      inactive,
+    };
+  }  
 }
